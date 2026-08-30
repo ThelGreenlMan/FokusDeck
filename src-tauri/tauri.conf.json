@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "FokusDeck",
+  "version": "0.1.0",
+  "identifier": "de.fokusdeck.app",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "FokusDeck",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 960,
+        "minHeight": 640,
+        "center": true,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "shortDescription": "Fokus-Timer und Karteikarten in einer ruhigen Lernumgebung",
+    "longDescription": "FokusDeck verbindet konfigurierbare Lernintervalle, digitale Karteikarten und ein Always-on-top-Overlay in einer lokalen Desktop-App."
+  }
+}
