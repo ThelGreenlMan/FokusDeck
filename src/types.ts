@@ -12,6 +12,23 @@ export interface Flashcard {
   deck: string;
   mastered: boolean;
   createdAt: string;
+  source?: ObsidianSource;
 }
 
-export type AppView = "dashboard" | "cards";
+export interface ObsidianSource {
+  type: "obsidian";
+  vaultName: string;
+  vaultPath: string;
+  relativePath: string;
+  modifiedAt: number;
+}
+
+export interface ObsidianConnection {
+  vaultName: string;
+  vaultPath: string;
+  lastSyncAt: number;
+  scannedMarkdownFiles: number;
+  importedCards: number;
+}
+
+export type AppView = "dashboard" | "cards" | "settings";

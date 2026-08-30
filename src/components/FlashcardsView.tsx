@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import type { Flashcard } from "../types";
+import type { Flashcard, ObsidianSource } from "../types";
 import {
   CardsIcon,
   CheckIcon,
   ChevronIcon,
+  ExternalLinkIcon,
   LayersIcon,
   PlusIcon,
   TrashIcon,
@@ -13,13 +14,18 @@ import {
 interface FlashcardsViewProps {
   cards: Flashcard[];
   onCardsChange: (cards: Flashcard[]) => void;
+  onOpenObsidianSource: (source: ObsidianSource) => void;
 }
 
 function createId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 }
 
-export function FlashcardsView({ cards, onCardsChange }: FlashcardsViewProps) {
+export function FlashcardsView({
+  cards,
+  onCardsChange,
+  onOpenObsidianSource,
+}: FlashcardsViewProps) {
   const [selectedDeck, setSelectedDeck] = useState("Alle Karten");
   const [cardIndex, setCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -210,7 +216,10 @@ export function FlashcardsView({ cards, onCardsChange }: FlashcardsViewProps) {
           {currentCard ? (
             <>
               <div className="study-panel__meta">
-                <span>{currentCard.deck}</span>
+                <span>
+                  {currentCard.deck}
+                  {currentCard.source && " · Obsidian"}
+                </span>
                 <span>
                   Karte {cardIndex + 1} von {filteredCards.length}
                 </span>
@@ -256,14 +265,26 @@ export function FlashcardsView({ cards, onCardsChange }: FlashcardsViewProps) {
                 </button>
               </div>
 
-              <button
-                type="button"
-                className="delete-card-button"
-                onClick={deleteCurrentCard}
-              >
-                <TrashIcon />
-                Karte löschen
-              </button>
+              {currentCard.source ? (
+                <button
+                  type="button"
+                  className="source-card-button"
+                  onClick={() => onOpenObsidianSource(currentCard.source!)}
+                  title={currentCard.source.relativePath}
+                >
+                  <ExternalLinkIcon />
+                  In Obsidian öffnen · {currentCard.source.relativePath}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="delete-card-button"
+                  onClick={deleteCurrentCard}
+                >
+                  <TrashIcon />
+                  Karte löschen
+                </button>
+              )}
             </>
           ) : (
             <div className="empty-state">

@@ -27,6 +27,11 @@
       "csp": null
     }
   },
+  "plugins": {
+    "opener": {
+      "open": "^obsidian://open\\?.+"
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

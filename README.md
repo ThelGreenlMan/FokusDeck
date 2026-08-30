@@ -11,6 +11,8 @@ FokusDeck ist eine lokale Desktop-App für konzentriertes Lernen. Sie kombiniert
 - Karten als „gewusst“ oder „noch einmal“ markieren
 - Lokale Speicherung aller Einstellungen und Karten
 - Kompaktes Always-on-top-Overlay für das Lernen in anderen Programmen
+- Schreibgeschützte Obsidian-Anbindung mit automatischer Synchronisierung
+- Obsidian-Karten direkt aus FokusDeck in der Ursprungsnotiz öffnen
 - Responsive Oberfläche und verständliche Tastatur-Fokuszustände
 
 ## Warum diese Technik?
@@ -20,11 +22,26 @@ Die UI entsteht mit **TypeScript und React**. Das macht Zustände wie Timer, Kar
 ## Voraussetzungen
 
 - Node.js 22 LTS oder neuer
-- pnpm 10
+- pnpm 11
 - Rust mit dem stabilen MSVC-Toolchain
 - Unter Windows: Microsoft C++ Build Tools und WebView2
 
 Die aktuellen plattformspezifischen Voraussetzungen stehen in der [offiziellen Tauri-Dokumentation](https://v2.tauri.app/start/prerequisites/).
+
+Unter Windows können die wichtigsten Werkzeuge so installiert werden:
+
+```powershell
+winget install OpenJS.NodeJS.LTS
+winget install Rustlang.Rustup
+winget install Microsoft.VisualStudio.2022.BuildTools
+```
+
+Im Visual-Studio-Installer anschließend die Workload **Desktopentwicklung mit C++** auswählen. Danach PowerShell neu öffnen und prüfen:
+
+```powershell
+node --version
+cargo --version
+```
 
 ## Starten
 
@@ -39,11 +56,36 @@ Nur die Web-Oberfläche im Browser starten:
 pnpm dev
 ```
 
+Parser-Tests und Frontend-Build prüfen:
+
+```powershell
+pnpm test
+pnpm build
+```
+
 Produktions-Build erstellen:
 
 ```powershell
 pnpm tauri build
 ```
+
+## Obsidian verbinden
+
+1. In FokusDeck **Einstellungen** öffnen und **Vault auswählen** anklicken.
+2. Den Hauptordner des Obsidian-Vaults auswählen. Er muss den Ordner `.obsidian` enthalten.
+3. Lernnotizen am Dateianfang mit YAML-Eigenschaften markieren:
+
+```markdown
+---
+fokusdeck: true
+deck: Biologie
+---
+# Was ist Photosynthese?
+
+Pflanzen wandeln Lichtenergie in chemische Energie um.
+```
+
+Die erste Überschrift wird zur Frage, der übrige Text zur Antwort. Alternativ können `question:` und `answer:` direkt in den Eigenschaften stehen. FokusDeck liest nur markierte Markdown-Dateien, verändert den Vault nicht und synchronisiert beim App-Start, beim Fensterfokus und einmal pro Minute.
 
 ## Projektstruktur
 
@@ -51,6 +93,7 @@ pnpm tauri build
 src/                     React-/TypeScript-Oberfläche
   components/            Timer, Dashboard und Karteikarten
   hooks/                 Timerlogik und lokale Speicherung
+  lib/                   Obsidian-Parser und native Anbindung
 src-tauri/               Native Tauri-/Rust-Hülle
   capabilities/          Eng begrenzte Fensterberechtigungen
 .github/workflows/       Automatische Qualitätsprüfungen
@@ -59,14 +102,15 @@ src-tauri/               Native Tauri-/Rust-Hülle
 ## Geplante nächste Schritte
 
 - Mehrere Lernprofile und Tagesziele
-- Import und Export von Karten als CSV
 - Spaced-Repetition-Algorithmus
+- Erweiterte Obsidian-Kartenformate mit mehreren Karten pro Notiz
+- Import und Export von Karten als CSV
 - Systembenachrichtigungen und globale Tastenkürzel
 - Installationspakete für Windows, macOS und Linux
 
 ## Datenschutz
 
-Im aktuellen MVP bleiben Timer-Einstellungen und Karteikarten lokal auf dem Gerät. Es gibt kein Benutzerkonto und keine Cloud-Synchronisation.
+Timer-Einstellungen und Karteikarten bleiben lokal auf dem Gerät. Es gibt kein Benutzerkonto und keine Cloud-Synchronisation. Bei einer verbundenen Obsidian-Bibliothek liest FokusDeck ausschließlich lokal markierte Markdown-Dateien; die Dateien werden nicht verändert.
 
 ## Lizenz
 
