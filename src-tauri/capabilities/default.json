@@ -9,6 +9,13 @@
     "core:window:allow-set-min-size",
     "core:window:allow-set-size",
     "dialog:allow-open",
-    "opener:allow-open-url"
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "obsidian:*"
+        }
+      ]
+    }
   ]
 }

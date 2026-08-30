@@ -41,6 +41,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: pnpm install --frozen-lockfile
       - run: pnpm tauri build --bundles nsis
+      - name: Smoke-test native application startup
+        shell: pwsh
+        run: |
+          $app = Start-Process -FilePath "src-tauri/target/release/fokusdeck.exe" -PassThru
+          if ($app.WaitForExit(5000)) {
+            throw "FokusDeck exited during its startup smoke test. Exit code: $($app.ExitCode)"
+          }
+          Stop-Process -Id $app.Id
       - uses: actions/upload-artifact@v4
         with:
           name: FokusDeck-Windows-Setup
