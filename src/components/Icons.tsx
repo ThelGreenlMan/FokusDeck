@@ -192,3 +192,22 @@ export function LinkIcon(props: IconProps) {
     </IconBase>
   );
 }
+
+export function LoadIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M12 4v10" />
+      <path d="m8 10 4 4 4-4" />
+      <path d="M5 18h14" />
+    </IconBase>
+  );
+}
+
+export function SaveIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M5 4h12l2 2v14H5V4Z" />
+      <path d="M8 4v5h8V4M8 20v-6h8v6" />
+    </IconBase>
+  );
+}

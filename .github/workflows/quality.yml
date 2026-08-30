@@ -27,7 +27,7 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
-      - run: cargo check --manifest-path src-tauri/Cargo.toml
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
 
   windows-bundle:
     runs-on: windows-latest

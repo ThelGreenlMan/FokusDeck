@@ -820,6 +820,31 @@ h2 {
   align-items: center;
 }
 
+.collection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.collection-feedback {
+  margin: -4px 0 18px;
+  padding: 11px 13px;
+  border-radius: 9px;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.collection-feedback.is-success {
+  color: var(--forest-2);
+  background: #e7f2ec;
+}
+
+.collection-feedback.is-error {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
 .new-card-form {
   display: grid;
   grid-template-columns: 1fr 1fr 0.6fr;
@@ -1750,6 +1775,11 @@ button:disabled {
   .page-intro {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .collection-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .timer-card__body,

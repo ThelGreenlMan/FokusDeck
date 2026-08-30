@@ -2,12 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import type { Flashcard, ObsidianSource } from "../types";
 import {
+  loadCollectionFile,
+  mergeCollection,
+  saveCollectionFile,
+} from "../lib/collection";
+import { isTauriDesktop } from "../lib/obsidian";
+import {
   CardsIcon,
   CheckIcon,
   ChevronIcon,
   ExternalLinkIcon,
   LayersIcon,
+  LoadIcon,
   PlusIcon,
+  SaveIcon,
   TrashIcon,
 } from "./Icons";
 
@@ -33,6 +41,10 @@ export function FlashcardsView({
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
   const [deck, setDeck] = useState("Allgemein");
+  const [isCollectionBusy, setIsCollectionBusy] = useState(false);
+  const [collectionMessage, setCollectionMessage] = useState("");
+  const [collectionError, setCollectionError] = useState("");
+  const isDesktop = isTauriDesktop();
 
   const decks = useMemo(
     () => ["Alle Karten", ...Array.from(new Set(cards.map((card) => card.deck)))],
@@ -102,6 +114,51 @@ export function FlashcardsView({
     setIsFlipped(false);
   };
 
+  const loadCollection = async () => {
+    setIsCollectionBusy(true);
+    setCollectionMessage("");
+    setCollectionError("");
+    try {
+      const collection = await loadCollectionFile();
+      if (!collection) return;
+      const result = mergeCollection(cards, collection);
+      onCardsChange(result.cards);
+      setSelectedDeck("Alle Karten");
+      setCollectionMessage(
+        `${collection.name}: ${result.imported} ${result.imported === 1 ? "Karte" : "Karten"} geladen` +
+          (result.skipped ? `, ${result.skipped} Dubletten übersprungen.` : "."),
+      );
+    } catch (error) {
+      setCollectionError(
+        error instanceof Error ? error.message : `Laden fehlgeschlagen: ${String(error)}`,
+      );
+    } finally {
+      setIsCollectionBusy(false);
+    }
+  };
+
+  const saveCollection = async () => {
+    setIsCollectionBusy(true);
+    setCollectionMessage("");
+    setCollectionError("");
+    try {
+      const collectionName =
+        selectedDeck === "Alle Karten" ? "FokusDeck-Sammlung" : selectedDeck;
+      const saved = await saveCollectionFile(filteredCards, collectionName);
+      if (saved) {
+        setCollectionMessage(
+          `${filteredCards.length} ${filteredCards.length === 1 ? "Karte" : "Karten"} als ${collectionName} gespeichert.`,
+        );
+      }
+    } catch (error) {
+      setCollectionError(
+        error instanceof Error ? error.message : `Speichern fehlgeschlagen: ${String(error)}`,
+      );
+    } finally {
+      setIsCollectionBusy(false);
+    }
+  };
+
   return (
     <main className="page-content flashcards-page">
       <header className="page-intro page-intro--cards">
@@ -110,15 +167,50 @@ export function FlashcardsView({
           <h1>Deine Karteikarten</h1>
           <p>Aktives Abrufen macht aus Gelesenem langfristiges Wissen.</p>
         </div>
-        <button
-          type="button"
-          className="primary-button"
-          onClick={() => setShowForm((current) => !current)}
-        >
-          <PlusIcon />
-          Neue Karte
-        </button>
+        <div className="collection-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void loadCollection()}
+            disabled={!isDesktop || isCollectionBusy}
+            title={isDesktop ? "Eine FokusDeck-Sammlung dazuladen" : "Nur in der Desktop-App verfügbar"}
+          >
+            <LoadIcon />
+            Sammlung laden
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void saveCollection()}
+            disabled={!isDesktop || isCollectionBusy || filteredCards.length === 0}
+            title={
+              selectedDeck === "Alle Karten"
+                ? "Alle Karten als Sammlung speichern"
+                : `Den Stapel ${selectedDeck} als Sammlung speichern`
+            }
+          >
+            <SaveIcon />
+            Sammlung speichern
+          </button>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => setShowForm((current) => !current)}
+          >
+            <PlusIcon />
+            Neue Karte
+          </button>
+        </div>
       </header>
+
+      {(collectionMessage || collectionError) && (
+        <p
+          className={`collection-feedback ${collectionError ? "is-error" : "is-success"}`}
+          role="status"
+        >
+          {collectionError || collectionMessage}
+        </p>
+      )}
 
       {showForm && (
         <form className="new-card-form" onSubmit={addCard}>
@@ -134,6 +226,7 @@ export function FlashcardsView({
               value={front}
               onChange={(event) => setFront(event.target.value)}
               placeholder="z. B. Was bedeutet Photosynthese?"
+              maxLength={1_000}
               autoFocus
               required
             />
@@ -144,6 +237,7 @@ export function FlashcardsView({
               value={back}
               onChange={(event) => setBack(event.target.value)}
               placeholder="Deine kurze, eindeutige Antwort"
+              maxLength={4_000}
               required
             />
           </label>
@@ -153,6 +247,7 @@ export function FlashcardsView({
               value={deck}
               onChange={(event) => setDeck(event.target.value)}
               placeholder="Allgemein"
+              maxLength={100}
               list="deck-options"
             />
             <datalist id="deck-options">

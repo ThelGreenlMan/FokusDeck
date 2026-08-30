@@ -9,6 +9,7 @@ FokusDeck ist eine lokale Desktop-App für konzentriertes Lernen. Sie kombiniert
 - Akustisches Signal beim Phasenwechsel
 - Karteikarten in eigenen Stapeln erstellen und löschen
 - Karten als „gewusst“ oder „noch einmal“ markieren
+- Ganze Karteikartensammlungen als `.fokusdeck.json` laden und speichern
 - Lokale Speicherung aller Einstellungen und Karten
 - Kompaktes Always-on-top-Overlay für das Lernen in anderen Programmen
 - Schreibgeschützte Obsidian-Anbindung mit automatischer Synchronisierung
@@ -86,6 +87,12 @@ Pflanzen wandeln Lichtenergie in chemische Energie um.
 ```
 
 Die erste Überschrift wird zur Frage, der übrige Text zur Antwort. Alternativ können `question:` und `answer:` direkt in den Eigenschaften stehen. FokusDeck liest nur markierte Markdown-Dateien, verändert den Vault nicht und synchronisiert beim App-Start, beim Fensterfokus und einmal pro Minute.
+
+## Karteikartensammlungen
+
+In der Karteikartenansicht stehen **Sammlung laden** und **Sammlung speichern** zur Verfügung. Ist ein einzelner Stapel ausgewählt, wird nur dieser Stapel gespeichert; bei **Alle Karten** wird die gesamte Sammlung exportiert.
+
+Gespeicherte Dateien enden auf `.fokusdeck.json` und enthalten Fragen, Antworten, Stapel sowie den Lernfortschritt. Lokale Obsidian-Pfade werden nicht exportiert. Beim Laden ergänzt FokusDeck nur neue Karten und überspringt inhaltliche Dubletten, ohne vorhandene Karten zu löschen.
 
 ## Projektstruktur
 
