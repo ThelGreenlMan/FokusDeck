@@ -203,6 +203,15 @@ export function LoadIcon(props: IconProps) {
   );
 }
 
+export function CsvIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M6 3h8l4 4v14H6V3Z" />
+      <path d="M14 3v5h5M9 12h6M9 16h6" />
+    </IconBase>
+  );
+}
+
 export function SaveIcon(props: IconProps) {
   return (
     <IconBase {...props}>

@@ -6,11 +6,13 @@ import {
   mergeCollection,
   saveCollectionFile,
 } from "../lib/collection";
+import { loadCsvFile } from "../lib/csv";
 import { isTauriDesktop } from "../lib/obsidian";
 import {
   CardsIcon,
   CheckIcon,
   ChevronIcon,
+  CsvIcon,
   ExternalLinkIcon,
   LayersIcon,
   LoadIcon,
@@ -137,6 +139,29 @@ export function FlashcardsView({
     }
   };
 
+  const importCsv = async () => {
+    setIsCollectionBusy(true);
+    setCollectionMessage("");
+    setCollectionError("");
+    try {
+      const collection = await loadCsvFile();
+      if (!collection) return;
+      const result = mergeCollection(cards, collection);
+      onCardsChange(result.cards);
+      setSelectedDeck("Alle Karten");
+      setCollectionMessage(
+        `${collection.name}: ${result.imported} ${result.imported === 1 ? "Karte" : "Karten"} aus CSV importiert` +
+          (result.skipped ? `, ${result.skipped} Dubletten übersprungen.` : "."),
+      );
+    } catch (error) {
+      setCollectionError(
+        error instanceof Error ? error.message : `CSV-Import fehlgeschlagen: ${String(error)}`,
+      );
+    } finally {
+      setIsCollectionBusy(false);
+    }
+  };
+
   const saveCollection = async () => {
     setIsCollectionBusy(true);
     setCollectionMessage("");
@@ -168,6 +193,16 @@ export function FlashcardsView({
           <p>Aktives Abrufen macht aus Gelesenem langfristiges Wissen.</p>
         </div>
         <div className="collection-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void importCsv()}
+            disabled={!isDesktop || isCollectionBusy}
+            title={isDesktop ? "Karteikarten aus einer CSV-Datei importieren" : "Nur in der Desktop-App verfügbar"}
+          >
+            <CsvIcon />
+            CSV importieren
+          </button>
           <button
             type="button"
             className="secondary-button"

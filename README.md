@@ -10,6 +10,7 @@ FokusDeck ist eine lokale Desktop-App für konzentriertes Lernen. Sie kombiniert
 - Karteikarten in eigenen Stapeln erstellen und löschen
 - Karten als „gewusst“ oder „noch einmal“ markieren
 - Ganze Karteikartensammlungen als `.fokusdeck.json` laden und speichern
+- Karteikarten aus CSV-Dateien von Excel, LibreOffice und anderen Lernprogrammen importieren
 - Lokale Speicherung aller Einstellungen und Karten
 - Kompaktes Always-on-top-Overlay für das Lernen in anderen Programmen
 - Schreibgeschützte Obsidian-Anbindung mit automatischer Synchronisierung
@@ -94,6 +95,18 @@ In der Karteikartenansicht stehen **Sammlung laden** und **Sammlung speichern** 
 
 Gespeicherte Dateien enden auf `.fokusdeck.json` und enthalten Fragen, Antworten, Stapel sowie den Lernfortschritt. Lokale Obsidian-Pfade werden nicht exportiert. Beim Laden ergänzt FokusDeck nur neue Karten und überspringt inhaltliche Dubletten, ohne vorhandene Karten zu löschen.
 
+## CSV-Import
+
+Über **CSV importieren** können vorhandene Karteikarten ergänzt werden. Die erste Zeile muss mindestens die Spalten **Frage** und **Antwort** enthalten. Optional sind **Stapel** und **Gemeistert**. Englische Bezeichnungen wie `question`, `answer`, `deck` und `mastered` werden ebenfalls erkannt.
+
+```csv
+Frage;Antwort;Stapel;Gemeistert
+Was ist Active Recall?;Aktives Abrufen von Wissen;Lernmethoden;ja
+Was ist Spaced Repetition?;Verteiltes Wiederholen;Lernmethoden;nein
+```
+
+FokusDeck erkennt Semikolon, Komma und Tabulator als Trennzeichen sowie UTF-8- und Windows-1252-Dateien. Anführungszeichen, Kommas und Zeilenumbrüche innerhalb von Feldern werden unterstützt. Bereits vorhandene inhaltliche Dubletten werden übersprungen.
+
 ## Projektstruktur
 
 ```text
@@ -111,7 +124,7 @@ src-tauri/               Native Tauri-/Rust-Hülle
 - Mehrere Lernprofile und Tagesziele
 - Spaced-Repetition-Algorithmus
 - Erweiterte Obsidian-Kartenformate mit mehreren Karten pro Notiz
-- Import und Export von Karten als CSV
+- Export von Karten als CSV
 - Systembenachrichtigungen und globale Tastenkürzel
 - Installationspakete für Windows, macOS und Linux
 

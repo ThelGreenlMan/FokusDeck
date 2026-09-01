@@ -9,6 +9,7 @@ use walkdir::{DirEntry, WalkDir};
 const MAX_MARKDOWN_FILE_BYTES: u64 = 1_048_576;
 const MAX_MARKDOWN_FILES: usize = 5_000;
 const MAX_COLLECTION_FILE_BYTES: u64 = 33_554_432;
+const MAX_CSV_FILE_BYTES: u64 = 16_777_216;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,6 +68,75 @@ fn is_collection_path(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| name.to_ascii_lowercase().ends_with(".fokusdeck.json"))
+}
+
+fn is_csv_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("csv"))
+}
+
+fn decode_windows_1252(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|byte| match byte {
+            0x80 => '€',
+            0x82 => '‚',
+            0x83 => 'ƒ',
+            0x84 => '„',
+            0x85 => '…',
+            0x86 => '†',
+            0x87 => '‡',
+            0x88 => 'ˆ',
+            0x89 => '‰',
+            0x8A => 'Š',
+            0x8B => '‹',
+            0x8C => 'Œ',
+            0x8E => 'Ž',
+            0x91 => '‘',
+            0x92 => '’',
+            0x93 => '“',
+            0x94 => '”',
+            0x95 => '•',
+            0x96 => '–',
+            0x97 => '—',
+            0x98 => '˜',
+            0x99 => '™',
+            0x9A => 'š',
+            0x9B => '›',
+            0x9C => 'œ',
+            0x9E => 'ž',
+            0x9F => 'Ÿ',
+            value => char::from(*value),
+        })
+        .collect()
+}
+
+fn decode_csv_bytes(bytes: Vec<u8>) -> String {
+    String::from_utf8(bytes).unwrap_or_else(|error| decode_windows_1252(&error.into_bytes()))
+}
+
+#[tauri::command]
+fn read_csv_file(path: String) -> Result<String, String> {
+    let requested_path = Path::new(&path);
+    if !is_csv_path(requested_path) {
+        return Err("Bitte wähle eine Datei mit der Endung .csv aus.".to_string());
+    }
+
+    let metadata = fs::symlink_metadata(requested_path)
+        .map_err(|_| "Die ausgewählte CSV-Datei wurde nicht gefunden.".to_string())?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err("Der ausgewählte Pfad ist keine reguläre CSV-Datei.".to_string());
+    }
+    if metadata.len() > MAX_CSV_FILE_BYTES {
+        return Err("Die CSV-Datei ist größer als 16 MB.".to_string());
+    }
+
+    let csv_path = fs::canonicalize(requested_path)
+        .map_err(|_| "Die ausgewählte CSV-Datei wurde nicht gefunden.".to_string())?;
+    let bytes =
+        fs::read(csv_path).map_err(|_| "Die CSV-Datei konnte nicht gelesen werden.".to_string())?;
+    Ok(decode_csv_bytes(bytes))
 }
 
 #[tauri::command]
@@ -221,7 +291,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             scan_obsidian_vault,
             read_collection_file,
-            write_collection_file
+            write_collection_file,
+            read_csv_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running FokusDeck");
@@ -229,7 +300,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{has_fokusdeck_marker, is_collection_path};
+    use super::{decode_csv_bytes, has_fokusdeck_marker, is_collection_path, is_csv_path};
     use std::path::Path;
 
     #[test]
@@ -253,5 +324,21 @@ mod tests {
         assert!(is_collection_path(Path::new("PRÜFUNG.FOKUSDECK.JSON")));
         assert!(!is_collection_path(Path::new("Prüfung.json")));
         assert!(!is_collection_path(Path::new("Prüfung.txt")));
+    }
+
+    #[test]
+    fn accepts_csv_files_case_insensitively() {
+        assert!(is_csv_path(Path::new("Karten.csv")));
+        assert!(is_csv_path(Path::new("Karten.CSV")));
+        assert!(!is_csv_path(Path::new("Karten.csv.txt")));
+    }
+
+    #[test]
+    fn reads_utf8_and_windows_1252_csv_text() {
+        assert_eq!(
+            decode_csv_bytes("Rückseite".as_bytes().to_vec()),
+            "Rückseite"
+        );
+        assert_eq!(decode_csv_bytes(vec![82, 252, 99, 107]), "Rück");
     }
 }
