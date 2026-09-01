@@ -9,8 +9,13 @@ FokusDeck ist eine lokale Desktop-App für konzentriertes Lernen. Sie kombiniert
 - Akustisches Signal beim Phasenwechsel
 - Karteikarten in eigenen Stapeln erstellen und löschen
 - Karten als „gewusst“ oder „noch einmal“ markieren
+- Ganze Karteikartensammlungen als `.fokusdeck.json` laden und speichern
+- Karteikarten aus CSV-Dateien von Excel, LibreOffice und anderen Lernprogrammen importieren
 - Lokale Speicherung aller Einstellungen und Karten
 - Kompaktes Always-on-top-Overlay für das Lernen in anderen Programmen
+- Signierte In-App-Updates direkt aus den Einstellungen
+- Schreibgeschützte Obsidian-Anbindung mit automatischer Synchronisierung
+- Obsidian-Karten direkt aus FokusDeck in der Ursprungsnotiz öffnen
 - Responsive Oberfläche und verständliche Tastatur-Fokuszustände
 
 ## Warum diese Technik?
@@ -20,11 +25,26 @@ Die UI entsteht mit **TypeScript und React**. Das macht Zustände wie Timer, Kar
 ## Voraussetzungen
 
 - Node.js 22 LTS oder neuer
-- pnpm 10
+- pnpm 11
 - Rust mit dem stabilen MSVC-Toolchain
 - Unter Windows: Microsoft C++ Build Tools und WebView2
 
 Die aktuellen plattformspezifischen Voraussetzungen stehen in der [offiziellen Tauri-Dokumentation](https://v2.tauri.app/start/prerequisites/).
+
+Unter Windows können die wichtigsten Werkzeuge so installiert werden:
+
+```powershell
+winget install OpenJS.NodeJS.LTS
+winget install Rustlang.Rustup
+winget install Microsoft.VisualStudio.2022.BuildTools
+```
+
+Im Visual-Studio-Installer anschließend die Workload **Desktopentwicklung mit C++** auswählen. Danach PowerShell neu öffnen und prüfen:
+
+```powershell
+node --version
+cargo --version
+```
 
 ## Starten
 
@@ -39,11 +59,58 @@ Nur die Web-Oberfläche im Browser starten:
 pnpm dev
 ```
 
+Parser-Tests und Frontend-Build prüfen:
+
+```powershell
+pnpm test
+pnpm build
+```
+
 Produktions-Build erstellen:
 
 ```powershell
 pnpm tauri build
 ```
+
+Der Windows-Installer erkennt eine vorhandene gleiche oder ältere FokusDeck-Version und ersetzt sie automatisch. Eine vorherige Deinstallation ist nicht nötig; lokale Karten, Sammlungen und Einstellungen bleiben erhalten. Ein Downgrade über eine neuere Version wird weiterhin nicht automatisch durchgeführt.
+
+In der installierten App kann unter **Einstellungen → FokusDeck aktualisieren** nach neuen Versionen gesucht werden. Ein verfügbares Update wird signaturgeprüft, heruntergeladen und mit einer kleinen Fortschrittsanzeige installiert; anschließend startet FokusDeck neu.
+
+## Obsidian verbinden
+
+1. In FokusDeck **Einstellungen** öffnen und **Vault auswählen** anklicken.
+2. Den Hauptordner des Obsidian-Vaults auswählen. Er muss den Ordner `.obsidian` enthalten.
+3. Lernnotizen am Dateianfang mit YAML-Eigenschaften markieren:
+
+```markdown
+---
+fokusdeck: true
+deck: Biologie
+---
+# Was ist Photosynthese?
+
+Pflanzen wandeln Lichtenergie in chemische Energie um.
+```
+
+Die erste Überschrift wird zur Frage, der übrige Text zur Antwort. Alternativ können `question:` und `answer:` direkt in den Eigenschaften stehen. FokusDeck liest nur markierte Markdown-Dateien, verändert den Vault nicht und synchronisiert beim App-Start, beim Fensterfokus und einmal pro Minute.
+
+## Karteikartensammlungen
+
+In der Karteikartenansicht stehen **Sammlung laden** und **Sammlung speichern** zur Verfügung. Ist ein einzelner Stapel ausgewählt, wird nur dieser Stapel gespeichert; bei **Alle Karten** wird die gesamte Sammlung exportiert.
+
+Gespeicherte Dateien enden auf `.fokusdeck.json` und enthalten Fragen, Antworten, Stapel sowie den Lernfortschritt. Lokale Obsidian-Pfade werden nicht exportiert. Beim Laden ergänzt FokusDeck nur neue Karten und überspringt inhaltliche Dubletten, ohne vorhandene Karten zu löschen.
+
+## CSV-Import
+
+Über **CSV importieren** können vorhandene Karteikarten ergänzt werden. Die erste Zeile muss mindestens die Spalten **Frage** und **Antwort** enthalten. Optional sind **Stapel** und **Gemeistert**. Englische Bezeichnungen wie `question`, `answer`, `deck` und `mastered` werden ebenfalls erkannt.
+
+```csv
+Frage;Antwort;Stapel;Gemeistert
+Was ist Active Recall?;Aktives Abrufen von Wissen;Lernmethoden;ja
+Was ist Spaced Repetition?;Verteiltes Wiederholen;Lernmethoden;nein
+```
+
+FokusDeck erkennt Semikolon, Komma und Tabulator als Trennzeichen sowie UTF-8- und Windows-1252-Dateien. Anführungszeichen, Kommas und Zeilenumbrüche innerhalb von Feldern werden unterstützt. Bereits vorhandene inhaltliche Dubletten werden übersprungen.
 
 ## Projektstruktur
 
@@ -51,22 +118,26 @@ pnpm tauri build
 src/                     React-/TypeScript-Oberfläche
   components/            Timer, Dashboard und Karteikarten
   hooks/                 Timerlogik und lokale Speicherung
+  lib/                   Obsidian-Parser und native Anbindung
 src-tauri/               Native Tauri-/Rust-Hülle
   capabilities/          Eng begrenzte Fensterberechtigungen
+  nsis/                  Angepasster Windows-Upgrade-Installer
 .github/workflows/       Automatische Qualitätsprüfungen
+                         und signierte Windows-Releases
 ```
 
 ## Geplante nächste Schritte
 
 - Mehrere Lernprofile und Tagesziele
-- Import und Export von Karten als CSV
 - Spaced-Repetition-Algorithmus
+- Erweiterte Obsidian-Kartenformate mit mehreren Karten pro Notiz
+- Export von Karten als CSV
 - Systembenachrichtigungen und globale Tastenkürzel
 - Installationspakete für Windows, macOS und Linux
 
 ## Datenschutz
 
-Im aktuellen MVP bleiben Timer-Einstellungen und Karteikarten lokal auf dem Gerät. Es gibt kein Benutzerkonto und keine Cloud-Synchronisation.
+Timer-Einstellungen und Karteikarten bleiben lokal auf dem Gerät. Es gibt kein Benutzerkonto und keine Cloud-Synchronisation. Bei einer verbundenen Obsidian-Bibliothek liest FokusDeck ausschließlich lokal markierte Markdown-Dateien; die Dateien werden nicht verändert.
 
 ## Lizenz
 

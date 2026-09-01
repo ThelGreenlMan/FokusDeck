@@ -1,12 +1,35 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Brand } from "./components/Brand";
 import { Dashboard } from "./components/Dashboard";
 import { FlashcardsView } from "./components/FlashcardsView";
-import { CardsIcon, CloseIcon, HomeIcon, PinIcon } from "./components/Icons";
+import {
+  CardsIcon,
+  CloseIcon,
+  HomeIcon,
+  PinIcon,
+  SettingsIcon,
+} from "./components/Icons";
+import { SettingsView } from "./components/SettingsView";
 import { TimerCard } from "./components/TimerCard";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { useStudyTimer } from "./hooks/useStudyTimer";
-import type { AppView, Flashcard, TimerSettings } from "./types";
+import {
+  cardsFromVaultScan,
+  chooseObsidianVault,
+  connectionFromScan,
+  isTauriDesktop,
+  mergeVaultCards,
+  openObsidianSource,
+  removeVaultCards,
+  scanObsidianVault,
+} from "./lib/obsidian";
+import type {
+  AppView,
+  Flashcard,
+  ObsidianConnection,
+  ObsidianSource,
+  TimerSettings,
+} from "./types";
 
 const initialSettings: TimerSettings = {
   focusMinutes: 25,
@@ -69,18 +92,106 @@ function App() {
     "fokusdeck:flashcards",
     starterCards,
   );
+  const [obsidianConnection, setObsidianConnection] =
+    usePersistentState<ObsidianConnection | null>(
+      "fokusdeck:obsidian-connection",
+      null,
+    );
   const [overlayMode, setOverlayMode] = useState(false);
-  const [overlayError, setOverlayError] = useState("");
+  const [appError, setAppError] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
+  const [syncError, setSyncError] = useState("");
   const timer = useStudyTimer(settings);
+  const isDesktop = isTauriDesktop();
+
+  const syncVault = useCallback(
+    async (
+      vaultPath: string,
+      options: { announce?: boolean; replaceVaultPath?: string } = {},
+    ) => {
+      setIsSyncing(true);
+      setSyncError("");
+      if (options.announce !== false) setSyncMessage("");
+
+      try {
+        const result = await scanObsidianVault(vaultPath);
+        const importedCards = cardsFromVaultScan(result);
+        setCards((currentCards) => {
+          const baseCards =
+            options.replaceVaultPath && options.replaceVaultPath !== result.rootPath
+              ? removeVaultCards(currentCards, options.replaceVaultPath)
+              : currentCards;
+          return mergeVaultCards(baseCards, importedCards, result.rootPath);
+        });
+        setObsidianConnection(connectionFromScan(result, importedCards.length));
+        if (options.announce !== false) {
+          setSyncMessage(
+            `${importedCards.length} ${importedCards.length === 1 ? "Karte" : "Karten"} aus ${result.vaultName} synchronisiert.`,
+          );
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error || "Unbekannter Fehler");
+        setSyncError(`Synchronisierung fehlgeschlagen: ${message}`);
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [setCards, setObsidianConnection],
+  );
+
+  useEffect(() => {
+    const vaultPath = obsidianConnection?.vaultPath;
+    if (!vaultPath || !isDesktop) return;
+
+    void syncVault(vaultPath, { announce: false });
+    const syncOnFocus = () => void syncVault(vaultPath, { announce: false });
+    const interval = window.setInterval(syncOnFocus, 60_000);
+    window.addEventListener("focus", syncOnFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", syncOnFocus);
+    };
+  }, [isDesktop, obsidianConnection?.vaultPath, syncVault]);
+
+  const connectObsidianVault = async () => {
+    setSyncError("");
+    const selectedPath = await chooseObsidianVault();
+    if (!selectedPath) return;
+    await syncVault(selectedPath, {
+      replaceVaultPath: obsidianConnection?.vaultPath,
+    });
+  };
+
+  const disconnectObsidianVault = () => {
+    if (obsidianConnection) {
+      setCards((currentCards) =>
+        removeVaultCards(currentCards, obsidianConnection.vaultPath),
+      );
+    }
+    setObsidianConnection(null);
+    setSyncMessage("Obsidian-Verbindung getrennt.");
+    setSyncError("");
+  };
+
+  const showObsidianSource = async (source: ObsidianSource) => {
+    try {
+      await openObsidianSource(source);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setAppError(`Die Obsidian-Notiz konnte nicht geöffnet werden: ${message}`);
+    }
+  };
 
   const setOverlay = async (enabled: boolean) => {
-    setOverlayError("");
+    setAppError("");
     setOverlayMode(enabled);
     try {
       await configureDesktopOverlay(enabled);
     } catch {
       setOverlayMode(false);
-      setOverlayError(
+      setAppError(
         "Das native Overlay konnte nicht aktiviert werden. In der Browser-Vorschau steht nur die kompakte Ansicht zur Verfügung.",
       );
     }
@@ -142,6 +253,14 @@ function App() {
             Karteikarten
             <small>{cards.length}</small>
           </button>
+          <button
+            type="button"
+            className={activeView === "settings" ? "is-active" : ""}
+            onClick={() => setActiveView("settings")}
+          >
+            <SettingsIcon />
+            Einstellungen
+          </button>
         </nav>
 
         <div className="sidebar__bottom">
@@ -157,16 +276,16 @@ function App() {
       </aside>
 
       <div className="app-main">
-        {overlayError && (
+        {appError && (
           <div className="toast" role="status">
-            {overlayError}
-            <button type="button" onClick={() => setOverlayError("")}>
+            {appError}
+            <button type="button" onClick={() => setAppError("")}>
               <CloseIcon />
             </button>
           </div>
         )}
 
-        {activeView === "dashboard" ? (
+        {activeView === "dashboard" && (
           <Dashboard
             timer={timer}
             settings={settings}
@@ -175,8 +294,31 @@ function App() {
             onOpenCards={() => setActiveView("cards")}
             onEnableOverlay={() => void setOverlay(true)}
           />
-        ) : (
-          <FlashcardsView cards={cards} onCardsChange={setCards} />
+        )}
+        {activeView === "cards" && (
+          <FlashcardsView
+            cards={cards}
+            onCardsChange={setCards}
+            onOpenObsidianSource={(source) => void showObsidianSource(source)}
+          />
+        )}
+        {activeView === "settings" && (
+          <SettingsView
+            timerSettings={settings}
+            connection={obsidianConnection}
+            isDesktop={isDesktop}
+            isSyncing={isSyncing}
+            syncMessage={syncMessage}
+            syncError={syncError}
+            onTimerSettingsChange={setSettings}
+            onConnect={() => void connectObsidianVault()}
+            onSync={() => {
+              if (obsidianConnection) {
+                void syncVault(obsidianConnection.vaultPath);
+              }
+            }}
+            onDisconnect={disconnectObsidianVault}
+          />
         )}
       </div>
     </div>

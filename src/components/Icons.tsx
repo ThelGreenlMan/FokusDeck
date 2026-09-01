@@ -145,3 +145,88 @@ export function CloseIcon(props: IconProps) {
     </IconBase>
   );
 }
+
+export function SettingsIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19 13.5v-3l-2-.7a7 7 0 0 0-.7-1.6l.9-1.9-2.1-2.1-1.9.9a7 7 0 0 0-1.7-.7L10.8 2h-3l-.7 2.4a7 7 0 0 0-1.7.7l-1.9-.9-2.1 2.1.9 1.9a7 7 0 0 0-.7 1.6l-2 .7v3l2 .7a7 7 0 0 0 .7 1.6l-.9 1.9 2.1 2.1 1.9-.9a7 7 0 0 0 1.7.7l.7 2.4h3l.7-2.4a7 7 0 0 0 1.7-.7l1.9.9 2.1-2.1-.9-1.9a7 7 0 0 0 .7-1.6l2-.7Z" transform="translate(1.7 0) scale(.86)" />
+    </IconBase>
+  );
+}
+
+export function FolderIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M3.5 7.5h6l2-2h9v13h-17v-11Z" />
+      <path d="M3.5 9.5h17" />
+    </IconBase>
+  );
+}
+
+export function RefreshIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M19 8a7 7 0 0 0-12-2L5 8" />
+      <path d="M5 4v4h4M5 16a7 7 0 0 0 12 2l2-2" />
+      <path d="M19 20v-4h-4" />
+    </IconBase>
+  );
+}
+
+export function DownloadIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M12 3v12" />
+      <path d="m7.5 10.5 4.5 4.5 4.5-4.5" />
+      <path d="M5 20h14" />
+    </IconBase>
+  );
+}
+
+export function ExternalLinkIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M14 5h5v5M19 5l-8 8" />
+      <path d="M17 13v5H6V7h5" />
+    </IconBase>
+  );
+}
+
+export function LinkIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="m10 13 4-4" />
+      <path d="M7.5 15.5 6 17a3 3 0 0 1-4-4l3-3a3 3 0 0 1 4 0" />
+      <path d="m16.5 8.5 1.5-1.5a3 3 0 0 1 4 4l-3 3a3 3 0 0 1-4 0" />
+    </IconBase>
+  );
+}
+
+export function LoadIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M12 4v10" />
+      <path d="m8 10 4 4 4-4" />
+      <path d="M5 18h14" />
+    </IconBase>
+  );
+}
+
+export function CsvIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M6 3h8l4 4v14H6V3Z" />
+      <path d="M14 3v5h5M9 12h6M9 16h6" />
+    </IconBase>
+  );
+}
+
+export function SaveIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M5 4h12l2 2v14H5V4Z" />
+      <path d="M8 4v5h8V4M8 20v-6h8v6" />
+    </IconBase>
+  );
+}
