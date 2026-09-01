@@ -5,6 +5,7 @@ import {
   LinkIcon,
   RefreshIcon,
 } from "./Icons";
+import { UpdatePanel } from "./UpdatePanel";
 
 interface SettingsViewProps {
   timerSettings: TimerSettings;
@@ -226,6 +227,8 @@ in chemische Energie um.`}</code></pre>
             direkt in den Eigenschaften angeben.
           </p>
         </section>
+
+        <UpdatePanel isDesktop={isDesktop} />
       </div>
     </main>
   );

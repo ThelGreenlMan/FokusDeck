@@ -13,6 +13,7 @@ FokusDeck ist eine lokale Desktop-App für konzentriertes Lernen. Sie kombiniert
 - Karteikarten aus CSV-Dateien von Excel, LibreOffice und anderen Lernprogrammen importieren
 - Lokale Speicherung aller Einstellungen und Karten
 - Kompaktes Always-on-top-Overlay für das Lernen in anderen Programmen
+- Signierte In-App-Updates direkt aus den Einstellungen
 - Schreibgeschützte Obsidian-Anbindung mit automatischer Synchronisierung
 - Obsidian-Karten direkt aus FokusDeck in der Ursprungsnotiz öffnen
 - Responsive Oberfläche und verständliche Tastatur-Fokuszustände
@@ -71,6 +72,10 @@ Produktions-Build erstellen:
 pnpm tauri build
 ```
 
+Der Windows-Installer erkennt eine vorhandene gleiche oder ältere FokusDeck-Version und ersetzt sie automatisch. Eine vorherige Deinstallation ist nicht nötig; lokale Karten, Sammlungen und Einstellungen bleiben erhalten. Ein Downgrade über eine neuere Version wird weiterhin nicht automatisch durchgeführt.
+
+In der installierten App kann unter **Einstellungen → FokusDeck aktualisieren** nach neuen Versionen gesucht werden. Ein verfügbares Update wird signaturgeprüft, heruntergeladen und mit einer kleinen Fortschrittsanzeige installiert; anschließend startet FokusDeck neu.
+
 ## Obsidian verbinden
 
 1. In FokusDeck **Einstellungen** öffnen und **Vault auswählen** anklicken.
@@ -116,7 +121,9 @@ src/                     React-/TypeScript-Oberfläche
   lib/                   Obsidian-Parser und native Anbindung
 src-tauri/               Native Tauri-/Rust-Hülle
   capabilities/          Eng begrenzte Fensterberechtigungen
+  nsis/                  Angepasster Windows-Upgrade-Installer
 .github/workflows/       Automatische Qualitätsprüfungen
+                         und signierte Windows-Releases
 ```
 
 ## Geplante nächste Schritte
