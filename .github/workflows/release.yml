@@ -84,9 +84,9 @@ jobs:
           if (-not $release.draft) { throw 'Release must remain a draft during validation.' }
 
           $assetNames = @($release.assets | ForEach-Object name)
-          $installer = @($assetNames | Where-Object { $_ -match '\.exe$' })
-          $signatures = @($assetNames | Where-Object { $_ -match '\.exe\.sig$' })
-          if ($installer.Count -ne 1 -or $signatures.Count -ne 1 -or $assetNames -notcontains 'latest.json') {
+          $installers = @($release.assets | Where-Object { $_.name -match '\.exe$' })
+          $signatures = @($release.assets | Where-Object { $_.name -match '\.exe\.sig$' })
+          if ($installers.Count -ne 1 -or $signatures.Count -ne 1 -or $assetNames -notcontains 'latest.json') {
             throw "Incomplete updater assets: $($assetNames -join ', ')"
           }
 
@@ -94,9 +94,11 @@ jobs:
           gh release download "v$env:APP_VERSION" --pattern latest.json --dir release-verify
           $latest = Get-Content release-verify/latest.json -Raw | ConvertFrom-Json
           $windows = $latest.platforms.'windows-x86_64'
-          $localSignature = (Get-Content "src-tauri/target/release/bundle/nsis/$($signatures[0])" -Raw).Trim()
+          $installer = $installers[0]
+          $signature = $signatures[0]
+          $localSignature = (Get-Content "src-tauri/target/release/bundle/nsis/$($signature.name)" -Raw).Trim()
           if ($latest.version -ne $env:APP_VERSION) { throw 'latest.json has the wrong version.' }
           if (-not $windows -or $windows.signature.Trim() -ne $localSignature) { throw 'latest.json has the wrong updater signature.' }
-          if (-not $windows.url.EndsWith("/$($installer[0])")) { throw 'latest.json points to the wrong installer.' }
+          if ($windows.url -ne $installer.url) { throw 'latest.json points to the wrong installer asset.' }
 
           gh release edit "v$env:APP_VERSION" --draft=false
