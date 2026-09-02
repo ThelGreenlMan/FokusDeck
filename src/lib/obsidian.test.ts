@@ -5,6 +5,7 @@ import {
   parseObsidianNote,
   type VaultNote,
 } from "./obsidian";
+import { reviewLearningCard } from "./learning";
 
 const vaultName = "Lernwissen";
 const vaultPath = "C:\\Notizen\\Lernwissen";
@@ -128,11 +129,11 @@ describe("mergeVaultCards", () => {
       vaultName,
       vaultPath,
     )!;
-    const oldImported: Flashcard = {
+    const oldImported: Flashcard = reviewLearningCard({
       ...imported,
       front: "Alte Frage",
       mastered: true,
-    };
+    }, "hard", "2026-09-01T10:00:00.000Z");
     const localCard: Flashcard = {
       id: "local",
       front: "Lokal",
@@ -151,7 +152,8 @@ describe("mergeVaultCards", () => {
     expect(merged).toHaveLength(2);
     expect(merged.find((card) => card.id === imported.id)).toMatchObject({
       front: "Aktualisierte Frage",
-      mastered: true,
+      mastered: false,
+      learning: oldImported.learning,
     });
     expect(merged).toContainEqual(localCard);
   });

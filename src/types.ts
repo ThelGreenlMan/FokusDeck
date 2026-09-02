@@ -12,6 +12,8 @@ export interface Flashcard {
   deck: string;
   mastered: boolean;
   createdAt: string;
+  /** Persistierter Wiederholplan. Fehlt bei älteren Karten und wird dann migriert. */
+  learning?: import("./lib/learning/model").LearningProgress;
   source?: ObsidianSource;
 }
 
@@ -31,4 +33,4 @@ export interface ObsidianConnection {
   importedCards: number;
 }
 
-export type AppView = "dashboard" | "cards" | "settings";
+export type AppView = "learning" | "dashboard" | "cards" | "settings";

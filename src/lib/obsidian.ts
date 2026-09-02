@@ -171,7 +171,8 @@ export function mergeVaultCards(
   );
   const cardsWithProgress = importedCards.map((card) => ({
     ...card,
-    mastered: existingById.get(card.id)?.mastered ?? false,
+    mastered: existingById.get(card.id)?.mastered ?? card.mastered,
+    learning: existingById.get(card.id)?.learning ?? card.learning,
   }));
   return [...cardsWithoutVault, ...cardsWithProgress];
 }

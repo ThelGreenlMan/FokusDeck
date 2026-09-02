@@ -38,6 +38,16 @@ export function CardsIcon(props: IconProps) {
   );
 }
 
+export function LearnIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 5.5c2.8-.8 5.5-.2 8 1.7v12c-2.5-1.9-5.2-2.5-8-1.7v-12Z" />
+      <path d="M20 5.5c-2.8-.8-5.5-.2-8 1.7v12c2.5-1.9 5.2-2.5 8-1.7v-12Z" />
+      <path d="M8 10h1.5M14.5 10H16" />
+    </IconBase>
+  );
+}
+
 export function HomeIcon(props: IconProps) {
   return (
     <IconBase {...props}>
