@@ -93,12 +93,23 @@ jobs:
           New-Item -ItemType Directory -Path release-verify | Out-Null
           gh release download "v$env:APP_VERSION" --pattern latest.json --dir release-verify
           $latest = Get-Content release-verify/latest.json -Raw | ConvertFrom-Json
-          $windows = $latest.platforms.'windows-x86_64'
           $installer = $installers[0]
           $signature = $signatures[0]
-          $localSignature = (Get-Content "src-tauri/target/release/bundle/nsis/$($signature.name)" -Raw).Trim()
-          if ($latest.version -ne $env:APP_VERSION) { throw 'latest.json has the wrong version.' }
-          if (-not $windows -or $windows.signature.Trim() -ne $localSignature) { throw 'latest.json has the wrong updater signature.' }
-          if ($windows.url -ne $installer.url) { throw 'latest.json points to the wrong installer asset.' }
+          $installerPath = "src-tauri/target/release/bundle/nsis/$($installer.name)"
+          $signaturePath = "src-tauri/target/release/bundle/nsis/$($signature.name)"
+          $localSignature = (Get-Content $signaturePath -Raw).Trim()
+          $localInstallerDigest = "sha256:$((Get-FileHash $installerPath -Algorithm SHA256).Hash.ToLowerInvariant())"
+          $localSignatureDigest = "sha256:$((Get-FileHash $signaturePath -Algorithm SHA256).Hash.ToLowerInvariant())"
 
-          gh release edit "v$env:APP_VERSION" --draft=false
+          if ($latest.version -ne $env:APP_VERSION) { throw 'latest.json has the wrong version.' }
+          if (-not $installer.digest -or $installer.digest.ToLowerInvariant() -ne $localInstallerDigest) { throw 'GitHub stored a different installer payload.' }
+          if (-not $signature.digest -or $signature.digest.ToLowerInvariant() -ne $localSignatureDigest) { throw 'GitHub stored a different signature payload.' }
+
+          foreach ($target in @('windows-x86_64', 'windows-x86_64-nsis')) {
+            $platform = $latest.platforms.$target
+            if (-not $platform) { throw "latest.json is missing $target." }
+            if ($platform.signature.Trim() -ne $localSignature) { throw "latest.json has the wrong updater signature for $target." }
+            if ($platform.url -ne $installer.url) { throw "latest.json points to the wrong installer asset for $target." }
+          }
+
+          gh api --method PATCH "repos/$env:GITHUB_REPOSITORY/releases/$env:RELEASE_ID" -F draft=false
