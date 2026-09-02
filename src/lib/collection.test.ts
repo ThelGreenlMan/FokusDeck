@@ -88,4 +88,151 @@ describe("FokusDeck collections", () => {
     expect(result.imported).toBe(1);
     expect(result.cards[1].id).not.toBe("one");
   });
+
+  it("restores a newer learning state onto a content duplicate", () => {
+    const backedUpCard: Flashcard = {
+      ...cards[0],
+      mastered: false,
+      learning: {
+        version: 1,
+        dueAt: "2026-10-01T10:00:00.000Z",
+        intervalDays: 12,
+        easeFactor: 2.5,
+        repetitions: 3,
+        lapses: 1,
+        lastReviewedAt: "2026-09-20T10:00:00.000Z",
+        lastRating: "good",
+        stats: {
+          reviews: 4,
+          correct: 3,
+          errors: 1,
+          uncertain: 0,
+          currentStreak: 2,
+          longestStreak: 2,
+        },
+      },
+    };
+    const collection = createCollectionDocument([backedUpCard], "Sicherung");
+    const result = mergeCollection([{ ...cards[0], learning: undefined }], collection);
+
+    expect(result).toMatchObject({ imported: 0, updated: 1, skipped: 0 });
+    expect(result.cards).toHaveLength(1);
+    expect(result.cards[0].learning).toEqual(backedUpCard.learning);
+  });
+
+  it("round-trips portable learning progress without exporting its source", () => {
+    const cardWithProgress: Flashcard = {
+      ...cards[0],
+      learning: {
+        version: 1,
+        dueAt: "2026-02-15T12:00:00.000Z",
+        intervalDays: 12.5,
+        easeFactor: 2.65,
+        repetitions: 4,
+        lapses: 1,
+        lastReviewedAt: "2026-02-03T12:00:00.000Z",
+        lastRating: "good",
+        stats: {
+          reviews: 7,
+          correct: 6,
+          errors: 1,
+          uncertain: 2,
+          currentStreak: 3,
+          longestStreak: 4,
+        },
+      },
+    };
+
+    const parsed = parseCollection(serializeCollection([cardWithProgress], "Lernstand"));
+
+    expect(parsed.version).toBe(1);
+    expect(parsed.cards[0].learning).toEqual(cardWithProgress.learning);
+    expect(parsed.cards[0]).not.toHaveProperty("source");
+    expect(JSON.stringify(parsed)).not.toContain("C:/Wissen");
+  });
+
+  it("keeps old version 1 collections without learning progress compatible", () => {
+    const parsed = parseCollection(
+      JSON.stringify({
+        format: "fokusdeck.collection",
+        version: 1,
+        name: "Alte Sammlung",
+        exportedAt: "2026-01-01T00:00:00.000Z",
+        cards: [
+          {
+            id: "legacy",
+            front: "Alte Frage",
+            back: "Alte Antwort",
+            deck: "Archiv",
+            mastered: false,
+            createdAt: "2025-12-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.cards).toHaveLength(1);
+    expect(parsed.cards[0]).not.toHaveProperty("learning");
+    expect(mergeCollection([], parsed).cards[0]).toMatchObject({
+      id: "legacy",
+      front: "Alte Frage",
+      mastered: false,
+    });
+  });
+
+  it("repairs invalid imported learning values defensively", () => {
+    const parsed = parseCollection(
+      JSON.stringify({
+        format: "fokusdeck.collection",
+        version: 1,
+        cards: [
+          {
+            id: "repaired",
+            front: "Frage",
+            back: "Antwort",
+            deck: "Test",
+            mastered: true,
+            createdAt: "2026-04-01T10:00:00.000Z",
+            learning: {
+              version: 99,
+              dueAt: "kein Datum",
+              intervalDays: -4,
+              easeFactor: 99,
+              repetitions: -3,
+              lapses: 2.8,
+              lastReviewedAt: "unbekannt",
+              lastRating: "perfekt",
+              stats: {
+                reviews: 2.8,
+                correct: 20,
+                errors: -1,
+                uncertain: "drei",
+                currentStreak: 9,
+                longestStreak: -5,
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.cards[0].learning).toEqual({
+      version: 1,
+      dueAt: "2026-04-01T10:00:00.000Z",
+      intervalDays: 0,
+      easeFactor: 4,
+      repetitions: 0,
+      lapses: 2,
+      lastReviewedAt: null,
+      lastRating: null,
+      stats: {
+        reviews: 2,
+        correct: 2,
+        errors: 0,
+        uncertain: 0,
+        currentStreak: 2,
+        longestStreak: 2,
+      },
+    });
+  });
 });

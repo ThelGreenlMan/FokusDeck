@@ -1,4 +1,6 @@
 import type { Flashcard } from "../types";
+import type { LearningProgress } from "./learning";
+import { normalizeLearningProgress } from "./learning";
 import { isTauriDesktop } from "./obsidian";
 
 const COLLECTION_FORMAT = "fokusdeck.collection";
@@ -12,6 +14,7 @@ interface CollectionCard {
   deck: string;
   mastered: boolean;
   createdAt: string;
+  learning?: LearningProgress;
 }
 
 export interface FokusDeckCollection {
@@ -25,6 +28,7 @@ export interface FokusDeckCollection {
 export interface CollectionMergeResult {
   cards: Flashcard[];
   imported: number;
+  updated: number;
   skipped: number;
 }
 
@@ -53,6 +57,13 @@ function cardSignature(card: Pick<Flashcard, "front" | "back" | "deck">) {
     .join("\u001f");
 }
 
+function portableLearningField(source: object, fallbackDueAt: string) {
+  if (!Object.prototype.hasOwnProperty.call(source, "learning")) return {};
+  const learning = (source as { learning?: unknown }).learning;
+  if (learning === undefined) return {};
+  return { learning: normalizeLearningProgress(learning, fallbackDueAt) };
+}
+
 export function createCollectionDocument(
   cards: Flashcard[],
   name = "FokusDeck-Sammlung",
@@ -66,20 +77,24 @@ export function createCollectionDocument(
     version: COLLECTION_VERSION,
     name: name.trim().slice(0, 100) || "FokusDeck-Sammlung",
     exportedAt: new Date().toISOString(),
-    cards: cards.map((card, index) => ({
-      id:
-        typeof card.id === "string" && card.id.length <= 300
-          ? card.id
-          : `collection:${createId()}`,
-      front: requireString(card.front, `Frage von Karte ${index + 1}`, 1_000),
-      back: requireString(card.back, `Antwort von Karte ${index + 1}`, 4_000),
-      deck: requireString(card.deck, `Stapel von Karte ${index + 1}`, 100),
-      mastered: card.mastered,
-      createdAt:
+    cards: cards.map((card, index) => {
+      const createdAt =
         typeof card.createdAt === "string" && !Number.isNaN(Date.parse(card.createdAt))
           ? card.createdAt
-          : new Date().toISOString(),
-    })),
+          : new Date().toISOString();
+      return {
+        id:
+          typeof card.id === "string" && card.id.length <= 300
+            ? card.id
+            : `collection:${createId()}`,
+        front: requireString(card.front, `Frage von Karte ${index + 1}`, 1_000),
+        back: requireString(card.back, `Antwort von Karte ${index + 1}`, 4_000),
+        deck: requireString(card.deck, `Stapel von Karte ${index + 1}`, 100),
+        mastered: card.mastered,
+        createdAt,
+        ...portableLearningField(card, createdAt),
+      };
+    }),
   };
 }
 
@@ -132,6 +147,7 @@ export function parseCollection(rawContent: string): FokusDeckCollection {
       deck: requireString(card.deck, `Stapel von Karte ${index + 1}`, 100),
       mastered: card.mastered === true,
       createdAt,
+      ...portableLearningField(card, createdAt),
     };
   });
 
@@ -155,28 +171,56 @@ export function mergeCollection(
   existingCards: Flashcard[],
   collection: FokusDeckCollection,
 ): CollectionMergeResult {
-  const signatures = new Set(existingCards.map(cardSignature));
+  const cards = [...existingCards];
+  const signatureIndexes = new Map(
+    cards.map((card, index) => [cardSignature(card), index]),
+  );
   const usedIds = new Set(existingCards.map((card) => card.id));
-  const importedCards: Flashcard[] = [];
+  let imported = 0;
+  let updated = 0;
   let skipped = 0;
+
+  const reviewedAt = (card: Flashcard) => {
+    const timestamp = card.learning?.lastReviewedAt
+      ? Date.parse(card.learning.lastReviewedAt)
+      : Number.NEGATIVE_INFINITY;
+    return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
+  };
 
   for (const card of collection.cards) {
     const signature = cardSignature(card);
-    if (signatures.has(signature)) {
-      skipped += 1;
+    const existingIndex = signatureIndexes.get(signature);
+    if (existingIndex !== undefined) {
+      const existing = cards[existingIndex];
+      const shouldRestoreProgress =
+        Boolean(card.learning) &&
+        (!existing.learning || reviewedAt(card) > reviewedAt(existing));
+      if (shouldRestoreProgress) {
+        cards[existingIndex] = {
+          ...existing,
+          mastered: card.mastered,
+          learning: card.learning,
+        };
+        updated += 1;
+      } else {
+        skipped += 1;
+      }
       continue;
     }
 
     let id = card.id;
     if (!id || usedIds.has(id)) id = `collection:${createId()}`;
     usedIds.add(id);
-    signatures.add(signature);
-    importedCards.push({ ...card, id });
+    const importedCard = { ...card, id };
+    signatureIndexes.set(signature, cards.length);
+    cards.push(importedCard);
+    imported += 1;
   }
 
   return {
-    cards: [...existingCards, ...importedCards],
-    imported: importedCards.length,
+    cards,
+    imported,
+    updated,
     skipped,
   };
 }

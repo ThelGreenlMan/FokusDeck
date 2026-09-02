@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Brand } from "./components/Brand";
 import { Dashboard } from "./components/Dashboard";
 import { FlashcardsView } from "./components/FlashcardsView";
+import { LearningView } from "./components/LearningView";
 import {
   CardsIcon,
   CloseIcon,
   HomeIcon,
+  LearnIcon,
   PinIcon,
   SettingsIcon,
 } from "./components/Icons";
@@ -22,7 +24,13 @@ import {
   openObsidianSource,
   removeVaultCards,
   scanObsidianVault,
+  type VaultNote,
 } from "./lib/obsidian";
+import {
+  normalizeLearningCards,
+  normalizeLearningProgress,
+  type LearningProgress,
+} from "./lib/learning";
 import type {
   AppView,
   Flashcard,
@@ -63,6 +71,141 @@ const starterCards: Flashcard[] = [
   },
 ];
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function safeMinutes(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(180, Math.max(1, Math.round(value)))
+    : fallback;
+}
+
+function safeTimerSettings(value: unknown): TimerSettings {
+  const stored = asRecord(value);
+  return {
+    focusMinutes: safeMinutes(stored?.focusMinutes, initialSettings.focusMinutes),
+    breakMinutes: safeMinutes(stored?.breakMinutes, initialSettings.breakMinutes),
+  };
+}
+
+function safeObsidianSource(value: unknown): ObsidianSource | undefined {
+  const source = asRecord(value);
+  if (
+    source?.type !== "obsidian" ||
+    typeof source.vaultName !== "string" ||
+    typeof source.vaultPath !== "string" ||
+    typeof source.relativePath !== "string" ||
+    typeof source.modifiedAt !== "number" ||
+    !Number.isFinite(source.modifiedAt)
+  ) {
+    return undefined;
+  }
+  return {
+    type: "obsidian",
+    vaultName: source.vaultName.slice(0, 200),
+    vaultPath: source.vaultPath,
+    relativePath: source.relativePath,
+    modifiedAt: source.modifiedAt,
+  };
+}
+
+function safeCards(value: unknown): Flashcard[] {
+  if (!Array.isArray(value)) return normalizeLearningCards(starterCards, new Date());
+
+  const cards: Flashcard[] = [];
+  const usedIds = new Set<string>();
+  for (const candidate of value.slice(0, 5_000)) {
+    const stored = asRecord(candidate);
+    if (
+      !stored ||
+      typeof stored.id !== "string" ||
+      !stored.id.trim() ||
+      typeof stored.front !== "string" ||
+      !stored.front.trim() ||
+      typeof stored.back !== "string" ||
+      !stored.back.trim() ||
+      typeof stored.deck !== "string" ||
+      !stored.deck.trim()
+    ) {
+      continue;
+    }
+
+    const id = stored.id.trim().slice(0, 300);
+    if (usedIds.has(id)) continue;
+    usedIds.add(id);
+    const createdAt =
+      typeof stored.createdAt === "string" &&
+      Number.isFinite(Date.parse(stored.createdAt))
+        ? stored.createdAt
+        : new Date().toISOString();
+    const source = safeObsidianSource(stored.source);
+    cards.push({
+      id,
+      front: stored.front.trim().slice(0, 1_000),
+      back: stored.back.trim().slice(0, 4_000),
+      deck: stored.deck.trim().slice(0, 100),
+      mastered: stored.mastered === true,
+      createdAt,
+      learning:
+        stored.learning === undefined
+          ? undefined
+          : normalizeLearningProgress(stored.learning, createdAt),
+      ...(source ? { source } : {}),
+    });
+  }
+  return normalizeLearningCards(cards, new Date());
+}
+
+function safeObsidianConnection(value: unknown): ObsidianConnection | null {
+  const stored = asRecord(value);
+  if (
+    !stored ||
+    typeof stored.vaultName !== "string" ||
+    typeof stored.vaultPath !== "string" ||
+    !stored.vaultPath.trim()
+  ) {
+    return null;
+  }
+  const count = (entry: unknown) =>
+    typeof entry === "number" && Number.isFinite(entry)
+      ? Math.max(0, Math.floor(entry))
+      : 0;
+  return {
+    vaultName: stored.vaultName.slice(0, 200),
+    vaultPath: stored.vaultPath,
+    lastSyncAt: count(stored.lastSyncAt),
+    scannedMarkdownFiles: count(stored.scannedMarkdownFiles),
+    importedCards: count(stored.importedCards),
+  };
+}
+
+interface SavedObsidianProgress {
+  mastered: boolean;
+  learning?: LearningProgress;
+}
+
+function safeObsidianProgress(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {} as Record<string, SavedObsidianProgress>;
+  }
+  const result: Record<string, SavedObsidianProgress> = {};
+  for (const [id, candidate] of Object.entries(value).slice(-5_000)) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
+    const stored = candidate as Record<string, unknown>;
+    result[id] = {
+      mastered: stored.mastered === true,
+      learning:
+        stored.learning === undefined
+          ? undefined
+          : normalizeLearningProgress(stored.learning, new Date()),
+    };
+  }
+  return result;
+}
+
 async function configureDesktopOverlay(enabled: boolean) {
   if (!window.__TAURI_INTERNALS__) return;
 
@@ -83,21 +226,33 @@ async function configureDesktopOverlay(enabled: boolean) {
 }
 
 function App() {
-  const [activeView, setActiveView] = useState<AppView>("dashboard");
+  const [activeView, setActiveView] = useState<AppView>("learning");
   const [settings, setSettings] = usePersistentState<TimerSettings>(
     "fokusdeck:timer-settings",
     initialSettings,
+    safeTimerSettings,
   );
-  const [cards, setCards] = usePersistentState<Flashcard[]>(
+  const [cards, setCards, cardsStorageError] = usePersistentState<Flashcard[]>(
     "fokusdeck:flashcards",
     starterCards,
+    safeCards,
   );
   const [obsidianConnection, setObsidianConnection] =
     usePersistentState<ObsidianConnection | null>(
       "fokusdeck:obsidian-connection",
       null,
+      safeObsidianConnection,
     );
+  const [storedObsidianProgress, setStoredObsidianProgress] =
+    usePersistentState<Record<string, SavedObsidianProgress> | null>(
+      "fokusdeck:obsidian-learning-progress-v1",
+      {},
+      safeObsidianProgress,
+    );
+  const obsidianProgressRef = useRef(safeObsidianProgress(storedObsidianProgress));
+  obsidianProgressRef.current = safeObsidianProgress(storedObsidianProgress);
   const [overlayMode, setOverlayMode] = useState(false);
+  const [vaultNotes, setVaultNotes] = useState<VaultNote[]>([]);
   const [appError, setAppError] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
@@ -116,7 +271,11 @@ function App() {
 
       try {
         const result = await scanObsidianVault(vaultPath);
-        const importedCards = cardsFromVaultScan(result);
+        setVaultNotes(result.notes);
+        const importedCards = cardsFromVaultScan(result).map((card) => {
+          const saved = obsidianProgressRef.current[card.id];
+          return saved ? { ...card, ...saved } : card;
+        });
         setCards((currentCards) => {
           const baseCards =
             options.replaceVaultPath && options.replaceVaultPath !== result.rootPath
@@ -171,6 +330,7 @@ function App() {
       );
     }
     setObsidianConnection(null);
+    setVaultNotes([]);
     setSyncMessage("Obsidian-Verbindung getrennt.");
     setSyncError("");
   };
@@ -197,69 +357,99 @@ function App() {
     }
   };
 
-  if (overlayMode) {
-    return (
-      <div className="overlay-shell">
-        <header className="overlay-shell__header" data-tauri-drag-region>
-          <Brand compact />
-          <div className="overlay-shell__status">
-            <PinIcon />
-            Immer im Vordergrund
-          </div>
-          <button
-            type="button"
-            className="overlay-close"
-            onClick={() => void setOverlay(false)}
-            aria-label="Overlay schließen"
-          >
-            <CloseIcon />
-          </button>
-        </header>
-        <TimerCard
-          compact
-          mode={timer.mode}
-          remainingSeconds={timer.remainingSeconds}
-          totalSeconds={timer.totalSeconds}
-          isRunning={timer.isRunning}
-          settings={settings}
-          onStart={timer.start}
-          onPause={timer.pause}
-          onReset={timer.reset}
-          onSkip={timer.skip}
-        />
-      </div>
-    );
-  }
+  useEffect(() => {
+    setCards((currentCards) => normalizeLearningCards(currentCards, new Date()));
+  }, [setCards]);
+
+  useEffect(() => {
+    const sourcedCards = cards.filter((card) => card.source);
+    if (!sourcedCards.length) return;
+    setStoredObsidianProgress((current) => {
+      const next = safeObsidianProgress(current);
+      for (const card of sourcedCards) {
+        next[card.id] = { mastered: card.mastered, learning: card.learning };
+      }
+      return Object.fromEntries(Object.entries(next).slice(-5_000));
+    });
+  }, [cards, setStoredObsidianProgress]);
 
   return (
-    <div className="app-shell">
+    <>
+      {overlayMode && (
+        <div className="overlay-shell">
+          <header className="overlay-shell__header" data-tauri-drag-region>
+            <Brand compact />
+            <div className="overlay-shell__status">
+              <PinIcon />
+              Immer im Vordergrund
+            </div>
+            <button
+              type="button"
+              className="overlay-close"
+              onClick={() => void setOverlay(false)}
+              aria-label="Overlay schließen"
+            >
+              <CloseIcon />
+            </button>
+          </header>
+          <TimerCard
+            compact
+            mode={timer.mode}
+            remainingSeconds={timer.remainingSeconds}
+            totalSeconds={timer.totalSeconds}
+            isRunning={timer.isRunning}
+            settings={settings}
+            onStart={timer.start}
+            onPause={timer.pause}
+            onReset={timer.reset}
+            onSkip={timer.skip}
+          />
+        </div>
+      )}
+      <div className="app-shell" hidden={overlayMode}>
       <aside className="sidebar">
         <Brand />
         <nav aria-label="Hauptnavigation">
           <button
             type="button"
+            className={activeView === "learning" ? "is-active" : ""}
+            aria-current={activeView === "learning" ? "page" : undefined}
+            onClick={() => setActiveView("learning")}
+          >
+            <LearnIcon />
+            <span className="nav-label nav-label--long">Heute lernen</span>
+            <span className="nav-label nav-label--short">Heute</span>
+          </button>
+          <button
+            type="button"
             className={activeView === "dashboard" ? "is-active" : ""}
+            aria-current={activeView === "dashboard" ? "page" : undefined}
             onClick={() => setActiveView("dashboard")}
           >
             <HomeIcon />
-            Übersicht
+            <span className="nav-label nav-label--long">Übersicht</span>
+            <span className="nav-label nav-label--short">Übersicht</span>
           </button>
           <button
             type="button"
             className={activeView === "cards" ? "is-active" : ""}
+            aria-current={activeView === "cards" ? "page" : undefined}
             onClick={() => setActiveView("cards")}
           >
             <CardsIcon />
-            Karteikarten
+            <span className="nav-label nav-label--long">Karteikarten</span>
+            <span className="nav-label nav-label--short">Karten</span>
             <small>{cards.length}</small>
           </button>
           <button
             type="button"
             className={activeView === "settings" ? "is-active" : ""}
+            aria-current={activeView === "settings" ? "page" : undefined}
             onClick={() => setActiveView("settings")}
           >
             <SettingsIcon />
-            Einstellungen
+            <span className="nav-label nav-label--long">Einstellungen</span>
+            <span className="nav-label nav-label--short">Optionen</span>
           </button>
         </nav>
 
@@ -276,12 +466,14 @@ function App() {
       </aside>
 
       <div className="app-main">
-        {appError && (
-          <div className="toast" role="status">
-            {appError}
-            <button type="button" onClick={() => setAppError("")}>
-              <CloseIcon />
-            </button>
+        {(appError || cardsStorageError) && (
+          <div className="toast" role="alert">
+            {appError || cardsStorageError}
+            {appError && (
+              <button type="button" onClick={() => setAppError("")}>
+                <CloseIcon />
+              </button>
+            )}
           </div>
         )}
 
@@ -292,9 +484,21 @@ function App() {
             cards={cards}
             onSettingsChange={setSettings}
             onOpenCards={() => setActiveView("cards")}
+            onOpenLearning={() => setActiveView("learning")}
             onEnableOverlay={() => void setOverlay(true)}
           />
         )}
+        <div hidden={activeView !== "learning"}>
+          <LearningView
+            cards={cards}
+            notes={vaultNotes}
+            hasObsidian={Boolean(obsidianConnection)}
+            isVisible={activeView === "learning" && !overlayMode}
+            onCardsChange={setCards}
+            onOpenCards={() => setActiveView("cards")}
+            onOpenSettings={() => setActiveView("settings")}
+          />
+        </div>
         {activeView === "cards" && (
           <FlashcardsView
             cards={cards}
@@ -321,7 +525,8 @@ function App() {
           />
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

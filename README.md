@@ -2,16 +2,19 @@
 
 FokusDeck ist eine lokale Desktop-App für konzentriertes Lernen. Sie kombiniert einen frei konfigurierbaren Lern- und Pausentimer mit digitalen Karteikarten und einer kompakten Always-on-top-Ansicht.
 
-## Funktionen im MVP
+## Funktionen in Version 0.4.0
 
 - Lern- und Pausendauer frei einstellen
 - Timer starten, pausieren, zurücksetzen und Phasen überspringen
 - Akustisches Signal beim Phasenwechsel
 - Karteikarten in eigenen Stapeln erstellen und löschen
-- Karten als „gewusst“ oder „noch einmal“ markieren
+- Geführter Bereich **Heute lernen** mit intelligentem Wiederholungsplan
+- Acht Lernmethoden von Active Recall bis SQ3R
+- Karten mit **Nochmal**, **Schwer**, **Gut** oder **Leicht** selbst bewerten
+- Prüfungen mit Zeitlimit, Ergebnis und Fehlerauswertung durchführen
 - Ganze Karteikartensammlungen als `.fokusdeck.json` laden und speichern
 - Karteikarten aus CSV-Dateien von Excel, LibreOffice und anderen Lernprogrammen importieren
-- Lokale Speicherung aller Einstellungen und Karten
+- Lokale Speicherung von Einstellungen, Karten, Wiederholungsständen und Lernentwürfen
 - Kompaktes Always-on-top-Overlay für das Lernen in anderen Programmen
 - Signierte In-App-Updates direkt aus den Einstellungen
 - Schreibgeschützte Obsidian-Anbindung mit automatischer Synchronisierung
@@ -76,6 +79,28 @@ Der Windows-Installer erkennt eine vorhandene gleiche oder ältere FokusDeck-Ver
 
 In der installierten App kann unter **Einstellungen → FokusDeck aktualisieren** nach neuen Versionen gesucht werden. Ein verfügbares Update wird signaturgeprüft, heruntergeladen und mit einer kleinen Fortschrittsanzeige installiert; anschließend startet FokusDeck neu.
 
+## Lernmethoden
+
+Der Bereich **Heute lernen** verbindet vier Methoden zu einer geführten Tagesrunde:
+
+1. **Verteiltes Wiederholen (Spaced Repetition):** FokusDeck zeigt Karten dann wieder, wenn sie fällig sind. Deine Bewertung mit **Nochmal**, **Schwer**, **Gut** oder **Leicht** bestimmt automatisch den nächsten Wiederholungszeitpunkt.
+2. **Active Recall:** Die Lösung bleibt zunächst verdeckt. Du rufst die Antwort im Kopf ab oder schreibst sie optional auf und vergleichst sie erst danach mit der hinterlegten Lösung.
+3. **Fehlerkartei:** Mit **Nochmal** oder **Schwer** bewertete Karten werden automatisch gesammelt und können direkt erneut gelernt werden. Es entstehen keine doppelten Karten; die Karte bleibt in ihrem ursprünglichen Stapel.
+4. **Interleaving:** Fällige Karten aus unterschiedlichen Stapeln werden abwechselnd gemischt. Dadurch übst du, zwischen Themen und Lösungswegen umzuschalten.
+
+Daneben stehen vier eigenständige Lernmodi zur Verfügung:
+
+5. **Prüfungsmodus:** Wähle Stapel, Kartenanzahl und Zeitlimit. Die Fragen erscheinen in zufälliger Reihenfolge; am Ende erhältst du ein Ergebnis und kannst falsche oder unsichere Antworten gezielt nachlernen.
+6. **Feynman-Methode:** Erkläre ein Thema in einfachen eigenen Worten und halte anschließend eine konkrete Wissenslücke fest. Aus dieser Lücke kannst du direkt eine normale Karteikarte erstellen.
+7. **Freies Erinnern:** Schreibe innerhalb von 3, 5 oder 10 Minuten alles auf, was du über einen Stapel oder eine Obsidian-Notiz weißt. Erst danach vergleichst du deinen Text mit den vorhandenen Inhalten.
+8. **SQ3R:** Arbeite einen Text in den fünf Schritten **Überblick**, **Fragen**, **Lesen**, **Wiedergeben** und **Wiederholen** durch. Du kannst eine verbundene Obsidian-Notiz auswählen oder jederzeit eigenen Text einfügen. Obsidian-Inhalte werden dabei ausschließlich gelesen und niemals verändert.
+
+### Selbstbewertung
+
+FokusDeck bewertet frei formulierte Antworten nicht automatisch. Nach dem Aufdecken beziehungsweise Vergleichen entscheidest du selbst, wie sicher deine Antwort war. So werden sinngleiche Formulierungen nicht fälschlich als Fehler behandelt. Im Prüfungsmodus markierst du Antworten entsprechend selbst als richtig, teilweise richtig oder falsch.
+
+Zwischenstände und Ergebnisse werden lokal gespeichert. Eine begonnene Tagesrunde oder ein gespeicherter SQ3R-Entwurf kann nach einem Neustart fortgesetzt werden; abgeschlossene Bewertungen bleiben im Wiederholungsplan erhalten.
+
 ## Obsidian verbinden
 
 1. In FokusDeck **Einstellungen** öffnen und **Vault auswählen** anklicken.
@@ -98,7 +123,7 @@ Die erste Überschrift wird zur Frage, der übrige Text zur Antwort. Alternativ 
 
 In der Karteikartenansicht stehen **Sammlung laden** und **Sammlung speichern** zur Verfügung. Ist ein einzelner Stapel ausgewählt, wird nur dieser Stapel gespeichert; bei **Alle Karten** wird die gesamte Sammlung exportiert.
 
-Gespeicherte Dateien enden auf `.fokusdeck.json` und enthalten Fragen, Antworten, Stapel sowie den Lernfortschritt. Lokale Obsidian-Pfade werden nicht exportiert. Beim Laden ergänzt FokusDeck nur neue Karten und überspringt inhaltliche Dubletten, ohne vorhandene Karten zu löschen.
+Gespeicherte Dateien enden auf `.fokusdeck.json` und enthalten Fragen, Antworten, Stapel sowie den Lern- und Wiederholungsstand. Ältere FokusDeck-Sammlungen ohne Wiederholungsplan bleiben kompatibel. Lokale Obsidian-Pfade werden nicht exportiert. Beim Laden ergänzt FokusDeck nur neue Karten und überspringt inhaltliche Dubletten, ohne vorhandene Karten zu löschen.
 
 ## CSV-Import
 
@@ -116,9 +141,9 @@ FokusDeck erkennt Semikolon, Komma und Tabulator als Trennzeichen sowie UTF-8- u
 
 ```text
 src/                     React-/TypeScript-Oberfläche
-  components/            Timer, Dashboard und Karteikarten
+  components/            Timer, Dashboard, Karteikarten und Lernmodi
   hooks/                 Timerlogik und lokale Speicherung
-  lib/                   Obsidian-Parser und native Anbindung
+  lib/                   Lernplanung, Parser und native Anbindung
 src-tauri/               Native Tauri-/Rust-Hülle
   capabilities/          Eng begrenzte Fensterberechtigungen
   nsis/                  Angepasster Windows-Upgrade-Installer
@@ -129,7 +154,6 @@ src-tauri/               Native Tauri-/Rust-Hülle
 ## Geplante nächste Schritte
 
 - Mehrere Lernprofile und Tagesziele
-- Spaced-Repetition-Algorithmus
 - Erweiterte Obsidian-Kartenformate mit mehreren Karten pro Notiz
 - Export von Karten als CSV
 - Systembenachrichtigungen und globale Tastenkürzel
@@ -137,7 +161,7 @@ src-tauri/               Native Tauri-/Rust-Hülle
 
 ## Datenschutz
 
-Timer-Einstellungen und Karteikarten bleiben lokal auf dem Gerät. Es gibt kein Benutzerkonto und keine Cloud-Synchronisation. Bei einer verbundenen Obsidian-Bibliothek liest FokusDeck ausschließlich lokal markierte Markdown-Dateien; die Dateien werden nicht verändert.
+Timer-Einstellungen, Karteikarten, Wiederholungsdaten, Prüfungsergebnisse und gespeicherte Lernentwürfe bleiben lokal auf dem Gerät. Es gibt kein Benutzerkonto und keine Cloud-Synchronisation. Frei formulierte Antworten werden nicht an einen externen Dienst gesendet. Bei einer verbundenen Obsidian-Bibliothek liest FokusDeck ausschließlich lokal markierte Markdown-Dateien; die Dateien werden nicht verändert.
 
 ## Lizenz
 
