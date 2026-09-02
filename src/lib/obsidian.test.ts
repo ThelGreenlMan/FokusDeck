@@ -57,6 +57,50 @@ answer: "Aktives Abrufen aus dem Gedächtnis."
     expect(card?.deck).toBe("Lernmethoden");
   });
 
+  it("removes HTML comments even when their removal forms a new opener", () => {
+    const card = parseObsidianNote(
+      note(`---
+fokusdeck: true
+---
+# Sichere Frage
+Antwort <!<!-- verborgen -->-->weiter verborgen--> bleibt sichtbar.`),
+      vaultName,
+      vaultPath,
+    );
+
+    expect(card?.back).toBe("Antwort  bleibt sichtbar.");
+    expect(card?.back).not.toContain("<!--");
+  });
+
+  it("removes comments formed while cleaning other Markdown", () => {
+    const card = parseObsidianNote(
+      note(`---
+fokusdeck: true
+---
+# Sichere Frage
+<!![--](bild.png) verborgen -->Antwort`),
+      vaultName,
+      vaultPath,
+    );
+
+    expect(card?.back).toBe("Antwort");
+    expect(card?.back).not.toContain("<!--");
+  });
+
+  it("removes consecutive and unfinished comments", () => {
+    const card = parseObsidianNote(
+      note(`---
+fokusdeck: true
+---
+# Sichere Frage
+A<!-- eins --><!-- zwei -->B<!-- unvollständig`),
+      vaultName,
+      vaultPath,
+    );
+
+    expect(card?.back).toBe("AB");
+  });
+
   it("ignores unmarked, disabled, or incomplete notes", () => {
     expect(
       parseObsidianNote(note("# Normale Notiz"), vaultName, vaultPath),
