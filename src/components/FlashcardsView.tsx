@@ -5,9 +5,11 @@ import {
   loadCollectionFile,
   mergeCollection,
   saveCollectionFile,
+  type FokusDeckCollection,
 } from "../lib/collection";
 import { loadCsvFile } from "../lib/csv";
 import { isTauriDesktop } from "../lib/obsidian";
+import { reviewLearningCard, summarizeLearning } from "../lib/learning";
 import {
   CardsIcon,
   CheckIcon,
@@ -25,6 +27,11 @@ interface FlashcardsViewProps {
   cards: Flashcard[];
   onCardsChange: (cards: Flashcard[]) => void;
   onOpenObsidianSource: (source: ObsidianSource) => void;
+}
+
+interface PendingImport {
+  collection: FokusDeckCollection;
+  source: "collection" | "csv";
 }
 
 function createId() {
@@ -46,6 +53,7 @@ export function FlashcardsView({
   const [isCollectionBusy, setIsCollectionBusy] = useState(false);
   const [collectionMessage, setCollectionMessage] = useState("");
   const [collectionError, setCollectionError] = useState("");
+  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const isDesktop = isTauriDesktop();
 
   const decks = useMemo(
@@ -62,7 +70,7 @@ export function FlashcardsView({
   );
 
   const currentCard = filteredCards[cardIndex];
-  const masteredCount = filteredCards.filter((card) => card.mastered).length;
+  const dueCount = summarizeLearning(filteredCards, new Date()).dueNow;
 
   useEffect(() => {
     setCardIndex(0);
@@ -75,6 +83,22 @@ export function FlashcardsView({
     }
   }, [cardIndex, filteredCards.length]);
 
+  useEffect(() => {
+    if (!pendingImport) return;
+    const result = mergeCollection(cards, pendingImport.collection);
+    onCardsChange(result.cards);
+    setSelectedDeck("Alle Karten");
+    const sourceText = pendingImport.source === "csv" ? " aus CSV importiert" : " geladen";
+    setCollectionMessage(
+      `${pendingImport.collection.name}: ${result.imported} ${result.imported === 1 ? "Karte" : "Karten"}${sourceText}` +
+        (result.updated
+          ? `, ${result.updated} ${result.updated === 1 ? "Lernstand" : "Lernstände"} aktualisiert`
+          : "") +
+        (result.skipped ? `, ${result.skipped} Dubletten übersprungen.` : "."),
+    );
+    setPendingImport(null);
+  }, [cards, onCardsChange, pendingImport]);
+
   const goToNextCard = () => {
     if (!filteredCards.length) return;
     setCardIndex((current) => (current + 1) % filteredCards.length);
@@ -85,7 +109,9 @@ export function FlashcardsView({
     if (!currentCard) return;
     onCardsChange(
       cards.map((card) =>
-        card.id === currentCard.id ? { ...card, mastered } : card,
+        card.id === currentCard.id
+          ? reviewLearningCard(card, mastered ? "good" : "again", new Date())
+          : card,
       ),
     );
     goToNextCard();
@@ -123,13 +149,7 @@ export function FlashcardsView({
     try {
       const collection = await loadCollectionFile();
       if (!collection) return;
-      const result = mergeCollection(cards, collection);
-      onCardsChange(result.cards);
-      setSelectedDeck("Alle Karten");
-      setCollectionMessage(
-        `${collection.name}: ${result.imported} ${result.imported === 1 ? "Karte" : "Karten"} geladen` +
-          (result.skipped ? `, ${result.skipped} Dubletten übersprungen.` : "."),
-      );
+      setPendingImport({ collection, source: "collection" });
     } catch (error) {
       setCollectionError(
         error instanceof Error ? error.message : `Laden fehlgeschlagen: ${String(error)}`,
@@ -146,13 +166,7 @@ export function FlashcardsView({
     try {
       const collection = await loadCsvFile();
       if (!collection) return;
-      const result = mergeCollection(cards, collection);
-      onCardsChange(result.cards);
-      setSelectedDeck("Alle Karten");
-      setCollectionMessage(
-        `${collection.name}: ${result.imported} ${result.imported === 1 ? "Karte" : "Karten"} aus CSV importiert` +
-          (result.skipped ? `, ${result.skipped} Dubletten übersprungen.` : "."),
-      );
+      setPendingImport({ collection, source: "csv" });
     } catch (error) {
       setCollectionError(
         error instanceof Error ? error.message : `CSV-Import fehlgeschlagen: ${String(error)}`,
@@ -329,13 +343,13 @@ export function FlashcardsView({
           </div>
           <div className="deck-progress">
             <div>
-              <span>Gemeistert</span>
-              <strong>{masteredCount}/{filteredCards.length}</strong>
+              <span>Heute fällig</span>
+              <strong>{dueCount}/{filteredCards.length}</strong>
             </div>
             <span className="progress-track">
               <span
                 style={{
-                  width: `${filteredCards.length ? (masteredCount / filteredCards.length) * 100 : 0}%`,
+                  width: `${filteredCards.length ? (dueCount / filteredCards.length) * 100 : 0}%`,
                 }}
               />
             </span>
@@ -358,7 +372,7 @@ export function FlashcardsView({
                 type="button"
                 className={`flashcard ${isFlipped ? "is-flipped" : ""}`}
                 onClick={() => setIsFlipped((current) => !current)}
-                aria-label={isFlipped ? "Antwort anzeigen. Klicken, um die Frage zu sehen." : "Frage anzeigen. Klicken, um die Antwort zu sehen."}
+                aria-label={`${isFlipped ? "Antwort" : "Frage"}: ${isFlipped ? currentCard.back : currentCard.front}. Klicken zum ${isFlipped ? "Zurückdrehen" : "Aufdecken"}.`}
               >
                 <span className="flashcard__label">
                   {isFlipped ? "ANTWORT" : "FRAGE"}
@@ -375,7 +389,7 @@ export function FlashcardsView({
                   className="study-action study-action--repeat"
                   onClick={() => updateMastery(false)}
                 >
-                  Noch einmal
+                  Nochmal
                 </button>
                 <button
                   type="button"
@@ -383,7 +397,7 @@ export function FlashcardsView({
                   onClick={() => updateMastery(true)}
                 >
                   <CheckIcon />
-                  Gewusst
+                  Gut
                 </button>
                 <button
                   type="button"
