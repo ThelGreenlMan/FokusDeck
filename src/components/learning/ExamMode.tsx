@@ -20,6 +20,7 @@ import type { Flashcard } from "../../types";
 const TIME_LIMITS = [5, 10, 20, 30] as const;
 const MAX_EXAM_CARDS = 30;
 const MAX_TYPED_ANSWER_LENGTH = 4_000;
+let fallbackIdCounter = 0;
 
 type ExamPhase = "configuration" | "running" | "complete";
 type ExamRating = Extract<ReviewRating, "good" | "hard" | "again">;
@@ -63,7 +64,11 @@ interface ExamConfiguration {
 }
 
 function createId() {
-  return globalThis.crypto?.randomUUID?.() ?? Date.now() + "-" + Math.random();
+  const secureId = globalThis.crypto?.randomUUID?.();
+  if (secureId) return secureId;
+
+  fallbackIdCounter += 1;
+  return `exam-${Date.now()}-${fallbackIdCounter}`;
 }
 
 function collectDecks(cards: readonly Flashcard[]) {
