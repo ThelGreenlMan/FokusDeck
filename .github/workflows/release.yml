@@ -2,12 +2,14 @@ name: Release FokusDeck
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
+    inputs:
+      version:
+        description: "Zu veröffentlichende Version, zum Beispiel 0.3.2"
+        required: true
+        type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: fokusdeck-release
@@ -16,8 +18,16 @@ concurrency:
 jobs:
   release-windows:
     runs-on: windows-latest
+    timeout-minutes: 60
+    environment:
+      name: release
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -26,31 +36,53 @@ jobs:
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
           components: rustfmt
+          toolchain: 1.98.0
       - run: pnpm install --frozen-lockfile
-      - name: Verify release version
+      - id: release-meta
+        name: Verify release source and version
         shell: pwsh
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
         run: |
+          if ($env:GITHUB_REF -ne 'refs/heads/main') {
+            throw "Releases must be started from main, not $env:GITHUB_REF."
+          }
+
+          git fetch --no-tags origin main
+          $headSha = (git rev-parse HEAD).Trim()
+          $mainSha = (git rev-parse origin/main).Trim()
+          if ($headSha -ne $env:GITHUB_SHA -or $headSha -ne $mainSha) {
+            throw "Release source must be the current main commit. HEAD=$headSha main=$mainSha event=$env:GITHUB_SHA"
+          }
+
           $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $tauriVersion = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
           $cargoVersion = if ((Get-Content src-tauri/Cargo.toml -Raw) -match '(?m)^version = "([^"]+)"') { $Matches[1] } else { '' }
           if ($packageVersion -ne $tauriVersion -or $packageVersion -ne $cargoVersion) {
             throw "Version mismatch: package=$packageVersion tauri=$tauriVersion cargo=$cargoVersion"
           }
-          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$packageVersion") {
-            throw "Tag $env:GITHUB_REF_NAME does not match application version v$packageVersion"
+          if ($env:REQUESTED_VERSION -ne $packageVersion) {
+            throw "Requested version $env:REQUESTED_VERSION does not match application version $packageVersion."
           }
-      - name: Verify signing secret
-        shell: pwsh
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
-            throw 'TAURI_SIGNING_PRIVATE_KEY is not configured.'
+
+          $tagName = "v$packageVersion"
+          $tagRefs = @(git ls-remote --tags origin "refs/tags/$tagName" "refs/tags/$tagName^{}")
+          if ($tagRefs.Count -gt 0) {
+            $peeledTag = $tagRefs | Where-Object { $_ -match '\^\{\}$' } | Select-Object -First 1
+            $directTag = $tagRefs | Where-Object { $_ -match "\srefs/tags/$([regex]::Escape($tagName))$" } | Select-Object -First 1
+            $tagLine = if ($peeledTag) { $peeledTag } else { $directTag }
+            $tagSha = ($tagLine -split '\s+')[0]
+            if ($tagSha -ne $headSha) {
+              throw "Tag $tagName already belongs to $tagSha instead of $headSha. Increase the application version."
+            }
           }
+
+          "version=$packageVersion" >> $env:GITHUB_OUTPUT
+          "tag=$tagName" >> $env:GITHUB_OUTPUT
       - run: pnpm test
       - run: pnpm build
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
-      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
       - id: tauri
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         env:
@@ -58,13 +90,14 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         with:
           tagName: v__VERSION__
+          releaseCommitish: ${{ github.sha }}
           releaseName: "FokusDeck v__VERSION__"
           releaseBody: "Neue FokusDeck-Version mit signiertem In-App-Update. Karten und Einstellungen bleiben beim Aktualisieren erhalten."
           releaseDraft: true
           prerelease: false
           generateReleaseNotes: true
           updaterJsonPreferNsis: true
-          args: --bundles nsis
+          args: --bundles nsis -- --locked
       - name: Smoke-test native application startup
         shell: pwsh
         run: |
@@ -79,9 +112,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_ID: ${{ steps.tauri.outputs.releaseId }}
           APP_VERSION: ${{ steps.tauri.outputs.appVersion }}
+          EXPECTED_VERSION: ${{ steps.release-meta.outputs.version }}
+          EXPECTED_TAG: ${{ steps.release-meta.outputs.tag }}
         run: |
           $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/$env:RELEASE_ID" | ConvertFrom-Json
           if (-not $release.draft) { throw 'Release must remain a draft during validation.' }
+          if ($env:APP_VERSION -ne $env:EXPECTED_VERSION) { throw 'The build output has an unexpected application version.' }
+          if ($release.tag_name -ne $env:EXPECTED_TAG) { throw 'The draft release has an unexpected tag.' }
+          if ($release.target_commitish -ne $env:GITHUB_SHA) {
+            throw "Release target $($release.target_commitish) is not the build commit $env:GITHUB_SHA."
+          }
+
+          $tagRefs = @(gh api "repos/$env:GITHUB_REPOSITORY/git/matching-refs/tags/$env:EXPECTED_TAG" | ConvertFrom-Json)
+          $exactTag = @($tagRefs | Where-Object { $_.ref -eq "refs/tags/$env:EXPECTED_TAG" })
+          if ($exactTag.Count -gt 1) { throw "Multiple exact tag references exist for $env:EXPECTED_TAG." }
+          if ($exactTag.Count -eq 1) {
+            $tagSha = (gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:EXPECTED_TAG" --jq .sha).Trim()
+            if ($tagSha -ne $env:GITHUB_SHA) {
+              throw "Existing tag $env:EXPECTED_TAG points to $tagSha instead of $env:GITHUB_SHA."
+            }
+          }
 
           $assetNames = @($release.assets | ForEach-Object name)
           $installers = @($release.assets | Where-Object { $_.name -match '\.exe$' })

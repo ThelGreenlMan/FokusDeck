@@ -12,6 +12,12 @@ artifacts/
 .env.*
 !.env.example
 
+# Private release-signing material
+fokusdeck.key
+fokusdeck.key.pub
+*.p12
+*.pfx
+
 # Editor and operating system files
 .idea/
 .vscode/*
