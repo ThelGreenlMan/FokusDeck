@@ -31,6 +31,7 @@ import {
   normalizeLearningProgress,
   type LearningProgress,
 } from "./lib/learning";
+import { displayedTimerGoal, normalizeTimerGoal } from "./lib/timerGoal";
 import type {
   AppView,
   Flashcard,
@@ -217,8 +218,8 @@ async function configureDesktopOverlay(enabled: boolean) {
 
   await appWindow.setAlwaysOnTop(enabled);
   if (enabled) {
-    await appWindow.setMinSize(new LogicalSize(360, 220));
-    await appWindow.setSize(new LogicalSize(420, 300));
+    await appWindow.setMinSize(new LogicalSize(360, 300));
+    await appWindow.setSize(new LogicalSize(420, 320));
   } else {
     await appWindow.setSize(new LogicalSize(1180, 760));
     await appWindow.setMinSize(new LogicalSize(960, 640));
@@ -232,6 +233,12 @@ function App() {
     initialSettings,
     safeTimerSettings,
   );
+  const [focusGoal, setFocusGoal, focusGoalStorageError] =
+    usePersistentState<string>(
+      "fokusdeck:timer-goal-v1",
+      "",
+      normalizeTimerGoal,
+    );
   const [cards, setCards, cardsStorageError] = usePersistentState<Flashcard[]>(
     "fokusdeck:flashcards",
     starterCards,
@@ -258,7 +265,34 @@ function App() {
   const [syncMessage, setSyncMessage] = useState("");
   const [syncError, setSyncError] = useState("");
   const timer = useStudyTimer(settings);
+  const [activeFocusGoal, setActiveFocusGoal] = useState<string | null>(null);
+  const { goal: displayedFocusGoal, locked: focusGoalLocked } =
+    displayedTimerGoal({
+      mode: timer.mode,
+      phaseStarted: timer.phaseStarted,
+      draftGoal: focusGoal,
+      activeFocusGoal,
+    });
   const isDesktop = isTauriDesktop();
+
+  const startTimer = () => {
+    if (timer.mode === "focus" && !timer.phaseStarted) {
+      setActiveFocusGoal(focusGoal.trim());
+    }
+    timer.start();
+  };
+
+  const resetTimer = () => {
+    timer.reset();
+    if (timer.mode === "focus") setActiveFocusGoal(null);
+  };
+
+  const skipTimer = () => {
+    if (timer.mode === "focus" && !timer.phaseStarted) {
+      setActiveFocusGoal(null);
+    }
+    timer.skip();
+  };
 
   const syncVault = useCallback(
     async (
@@ -398,11 +432,14 @@ function App() {
             remainingSeconds={timer.remainingSeconds}
             totalSeconds={timer.totalSeconds}
             isRunning={timer.isRunning}
+            phaseStarted={timer.phaseStarted}
             settings={settings}
-            onStart={timer.start}
+            focusGoal={displayedFocusGoal}
+            focusGoalLocked={focusGoalLocked}
+            onStart={startTimer}
             onPause={timer.pause}
-            onReset={timer.reset}
-            onSkip={timer.skip}
+            onReset={resetTimer}
+            onSkip={skipTimer}
           />
         </div>
       )}
@@ -466,9 +503,9 @@ function App() {
       </aside>
 
       <div className="app-main">
-        {(appError || cardsStorageError) && (
+        {(appError || cardsStorageError || focusGoalStorageError) && (
           <div className="toast" role="alert">
-            {appError || cardsStorageError}
+            {appError || cardsStorageError || focusGoalStorageError}
             {appError && (
               <button type="button" onClick={() => setAppError("")}>
                 <CloseIcon />
@@ -481,8 +518,14 @@ function App() {
           <Dashboard
             timer={timer}
             settings={settings}
+            focusGoal={displayedFocusGoal}
+            focusGoalLocked={focusGoalLocked}
             cards={cards}
             onSettingsChange={setSettings}
+            onFocusGoalChange={setFocusGoal}
+            onTimerStart={startTimer}
+            onTimerReset={resetTimer}
+            onTimerSkip={skipTimer}
             onOpenCards={() => setActiveView("cards")}
             onOpenLearning={() => setActiveView("learning")}
             onEnableOverlay={() => void setOverlay(true)}
@@ -509,6 +552,7 @@ function App() {
         {activeView === "settings" && (
           <SettingsView
             timerSettings={settings}
+            timerSettingsLocked={timer.phaseStarted}
             connection={obsidianConnection}
             isDesktop={isDesktop}
             isSyncing={isSyncing}

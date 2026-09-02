@@ -9,6 +9,7 @@ import { UpdatePanel } from "./UpdatePanel";
 
 interface SettingsViewProps {
   timerSettings: TimerSettings;
+  timerSettingsLocked: boolean;
   connection: ObsidianConnection | null;
   isDesktop: boolean;
   isSyncing: boolean;
@@ -30,6 +31,7 @@ function formatSyncTime(timestamp: number) {
 
 export function SettingsView({
   timerSettings,
+  timerSettingsLocked,
   connection,
   isDesktop,
   isSyncing,
@@ -177,6 +179,7 @@ export function SettingsView({
                   min="1"
                   max="180"
                   value={timerSettings.focusMinutes}
+                  disabled={timerSettingsLocked}
                   onChange={(event) => updateMinutes("focusMinutes", event.target.value)}
                 />
                 Minuten
@@ -190,6 +193,7 @@ export function SettingsView({
                   min="1"
                   max="180"
                   value={timerSettings.breakMinutes}
+                  disabled={timerSettingsLocked}
                   onChange={(event) => updateMinutes("breakMinutes", event.target.value)}
                 />
                 Minuten
@@ -197,8 +201,9 @@ export function SettingsView({
             </label>
           </div>
           <p className="settings-note">
-            Änderungen werden lokal gespeichert und beim nächsten Start wieder
-            verwendet.
+            {timerSettingsLocked
+              ? "Setze die aktuelle Phase zurück, um die Timer-Vorgaben zu ändern."
+              : "Änderungen werden lokal gespeichert und beim nächsten Start wieder verwendet."}
           </p>
         </section>
 
