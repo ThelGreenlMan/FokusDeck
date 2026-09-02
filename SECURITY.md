@@ -38,4 +38,4 @@ WebKitGTK 6 abgeschlossen hat. Der Upstream-Umstieg und die anschließende
 Entfernung dieser Ausnahme werden in
 [#13](https://github.com/ThelGreenlMan/FokusDeck/issues/13) nachverfolgt.
 
-Zuletzt geprüft: 2. September 2026.
+Zuletzt geprüft: 3. September 2026.
