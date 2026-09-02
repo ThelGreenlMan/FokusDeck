@@ -5,6 +5,7 @@ import {
   parseObsidianNote,
   type VaultNote,
 } from "./obsidian";
+import { reviewLearningCard } from "./learning";
 
 const vaultName = "Lernwissen";
 const vaultPath = "C:\\Notizen\\Lernwissen";
@@ -56,6 +57,50 @@ answer: "Aktives Abrufen aus dem Gedächtnis."
     expect(card?.deck).toBe("Lernmethoden");
   });
 
+  it("removes HTML comments even when their removal forms a new opener", () => {
+    const card = parseObsidianNote(
+      note(`---
+fokusdeck: true
+---
+# Sichere Frage
+Antwort <!<!-- verborgen -->-->weiter verborgen--> bleibt sichtbar.`),
+      vaultName,
+      vaultPath,
+    );
+
+    expect(card?.back).toBe("Antwort  bleibt sichtbar.");
+    expect(card?.back).not.toContain("<!--");
+  });
+
+  it("removes comments formed while cleaning other Markdown", () => {
+    const card = parseObsidianNote(
+      note(`---
+fokusdeck: true
+---
+# Sichere Frage
+<!![--](bild.png) verborgen -->Antwort`),
+      vaultName,
+      vaultPath,
+    );
+
+    expect(card?.back).toBe("Antwort");
+    expect(card?.back).not.toContain("<!--");
+  });
+
+  it("removes consecutive and unfinished comments", () => {
+    const card = parseObsidianNote(
+      note(`---
+fokusdeck: true
+---
+# Sichere Frage
+A<!-- eins --><!-- zwei -->B<!-- unvollständig`),
+      vaultName,
+      vaultPath,
+    );
+
+    expect(card?.back).toBe("AB");
+  });
+
   it("ignores unmarked, disabled, or incomplete notes", () => {
     expect(
       parseObsidianNote(note("# Normale Notiz"), vaultName, vaultPath),
@@ -84,11 +129,11 @@ describe("mergeVaultCards", () => {
       vaultName,
       vaultPath,
     )!;
-    const oldImported: Flashcard = {
+    const oldImported: Flashcard = reviewLearningCard({
       ...imported,
       front: "Alte Frage",
       mastered: true,
-    };
+    }, "hard", "2026-09-01T10:00:00.000Z");
     const localCard: Flashcard = {
       id: "local",
       front: "Lokal",
@@ -107,7 +152,8 @@ describe("mergeVaultCards", () => {
     expect(merged).toHaveLength(2);
     expect(merged.find((card) => card.id === imported.id)).toMatchObject({
       front: "Aktualisierte Frage",
-      mastered: true,
+      mastered: false,
+      learning: oldImported.learning,
     });
     expect(merged).toContainEqual(localCard);
   });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { TimerMode, TimerSettings } from "../types";
 
 function playCompletionTone() {
@@ -45,20 +45,21 @@ export function useStudyTimer(settings: TimerSettings) {
   const [remainingSeconds, setRemainingSeconds] = useState(() =>
     secondsFor("focus", settings),
   );
+  const [totalSeconds, setTotalSeconds] = useState(() =>
+    secondsFor("focus", settings),
+  );
   const [isRunning, setIsRunning] = useState(false);
+  const [phaseStarted, setPhaseStarted] = useState(false);
   const [completedSessions, setCompletedSessions] = useState(0);
   const deadlineRef = useRef(0);
 
-  const totalSeconds = useMemo(
-    () => secondsFor(mode, settings),
-    [mode, settings],
-  );
-
   useEffect(() => {
-    if (!isRunning) {
-      setRemainingSeconds(secondsFor(mode, settings));
-    }
-  }, [settings, mode, isRunning]);
+    if (phaseStarted) return;
+
+    const nextTotalSeconds = secondsFor(mode, settings);
+    setTotalSeconds(nextTotalSeconds);
+    setRemainingSeconds(nextTotalSeconds);
+  }, [settings, mode, phaseStarted]);
 
   const moveToNextPhase = useCallback(
     (countSession: boolean) => {
@@ -66,9 +67,12 @@ export function useStudyTimer(settings: TimerSettings) {
       if (countSession && mode === "focus") {
         setCompletedSessions((current) => current + 1);
       }
+      const nextTotalSeconds = secondsFor(nextMode, settings);
       setMode(nextMode);
-      setRemainingSeconds(secondsFor(nextMode, settings));
+      setTotalSeconds(nextTotalSeconds);
+      setRemainingSeconds(nextTotalSeconds);
       setIsRunning(false);
+      setPhaseStarted(false);
     },
     [mode, settings],
   );
@@ -105,6 +109,7 @@ export function useStudyTimer(settings: TimerSettings) {
 
   const start = useCallback(() => {
     deadlineRef.current = Date.now() + remainingSeconds * 1000;
+    setPhaseStarted(true);
     setIsRunning(true);
   }, [remainingSeconds]);
 
@@ -118,8 +123,11 @@ export function useStudyTimer(settings: TimerSettings) {
   }, []);
 
   const reset = useCallback(() => {
+    const nextTotalSeconds = secondsFor(mode, settings);
     setIsRunning(false);
-    setRemainingSeconds(secondsFor(mode, settings));
+    setPhaseStarted(false);
+    setTotalSeconds(nextTotalSeconds);
+    setRemainingSeconds(nextTotalSeconds);
   }, [mode, settings]);
 
   const skip = useCallback(() => {
@@ -131,6 +139,7 @@ export function useStudyTimer(settings: TimerSettings) {
     remainingSeconds,
     totalSeconds,
     isRunning,
+    phaseStarted,
     completedSessions,
     start,
     pause,

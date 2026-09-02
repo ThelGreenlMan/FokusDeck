@@ -60,9 +60,34 @@ function readFrontmatter(content: string): ParsedFrontmatter | null {
   };
 }
 
+function removeHtmlComments(markdown: string) {
+  const visibleCharacters: string[] = [];
+  let cursor = 0;
+
+  while (cursor < markdown.length) {
+    visibleCharacters.push(markdown[cursor]);
+    cursor += 1;
+
+    const length = visibleCharacters.length;
+    const endsWithCommentStart =
+      length >= 4 &&
+      visibleCharacters[length - 4] === "<" &&
+      visibleCharacters[length - 3] === "!" &&
+      visibleCharacters[length - 2] === "-" &&
+      visibleCharacters[length - 1] === "-";
+    if (!endsWithCommentStart) continue;
+
+    visibleCharacters.length -= 4;
+    const endIndex = markdown.indexOf("-->", cursor);
+    if (endIndex === -1) break;
+    cursor = endIndex + 3;
+  }
+
+  return visibleCharacters.join("");
+}
+
 function cleanMarkdown(markdown: string) {
-  return markdown
-    .replace(/<!--[\s\S]*?-->/g, "")
+  const cleaned = markdown
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/^#{1,6}\s+/gm, "")
@@ -72,7 +97,9 @@ function cleanMarkdown(markdown: string) {
     .replace(/```[a-zA-Z0-9_-]*\n?/g, "")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/__([^_]+)__/g, "$1")
+    .replace(/__([^_]+)__/g, "$1");
+
+  return removeHtmlComments(cleaned)
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -144,7 +171,8 @@ export function mergeVaultCards(
   );
   const cardsWithProgress = importedCards.map((card) => ({
     ...card,
-    mastered: existingById.get(card.id)?.mastered ?? false,
+    mastered: existingById.get(card.id)?.mastered ?? card.mastered,
+    learning: existingById.get(card.id)?.learning ?? card.learning,
   }));
   return [...cardsWithoutVault, ...cardsWithProgress];
 }

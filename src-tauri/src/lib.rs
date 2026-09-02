@@ -1,7 +1,9 @@
 use serde::Serialize;
 use std::{
-    fs,
-    path::Path,
+    fs::{self, File, OpenOptions},
+    io::{self, Write},
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 use walkdir::{DirEntry, WalkDir};
@@ -10,6 +12,8 @@ const MAX_MARKDOWN_FILE_BYTES: u64 = 1_048_576;
 const MAX_MARKDOWN_FILES: usize = 5_000;
 const MAX_COLLECTION_FILE_BYTES: u64 = 33_554_432;
 const MAX_CSV_FILE_BYTES: u64 = 16_777_216;
+const AUXILIARY_FILE_ATTEMPTS: usize = 128;
+static AUXILIARY_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -75,6 +79,132 @@ fn is_csv_path(path: &Path) -> bool {
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| extension.eq_ignore_ascii_case("csv"))
 }
+
+struct TemporaryFileGuard {
+    path: PathBuf,
+}
+
+impl Drop for TemporaryFileGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+fn auxiliary_path(parent: &Path, purpose: &str) -> PathBuf {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let counter = AUXILIARY_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    parent.join(format!(
+        ".fokusdeck-{purpose}-{}-{timestamp:x}-{counter:x}.tmp",
+        std::process::id()
+    ))
+}
+
+fn create_temporary_file(parent: &Path) -> io::Result<(TemporaryFileGuard, File)> {
+    for _ in 0..AUXILIARY_FILE_ATTEMPTS {
+        let path = auxiliary_path(parent, "write");
+        match OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(file) => return Ok((TemporaryFileGuard { path }, file)),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        "Kein eindeutiger temporärer Dateiname verfügbar.",
+    ))
+}
+
+fn validate_collection_target(path: &Path) -> Result<Option<fs::Permissions>, String> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if metadata.file_type().is_symlink() || !metadata.is_file() {
+                return Err("Das ausgewählte Ziel ist keine reguläre Datei.".to_string());
+            }
+            if metadata.permissions().readonly() {
+                return Err("Die vorhandene Sammlungsdatei ist schreibgeschützt.".to_string());
+            }
+            Ok(Some(metadata.permissions()))
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(_) => Err("Die vorhandene Datei konnte nicht geprüft werden.".to_string()),
+    }
+}
+
+#[cfg(not(windows))]
+fn replace_temporary_file(temporary_path: &Path, target_path: &Path) -> Result<(), String> {
+    fs::rename(temporary_path, target_path)
+        .map_err(|_| "Die Sammlung konnte nicht sicher ersetzt werden.".to_string())
+}
+
+#[cfg(windows)]
+fn move_target_to_backup(target_path: &Path) -> Result<PathBuf, String> {
+    let parent = target_path
+        .parent()
+        .ok_or_else(|| "Der Zielordner fehlt.".to_string())?;
+
+    for _ in 0..AUXILIARY_FILE_ATTEMPTS {
+        let backup_path = auxiliary_path(parent, "backup");
+        match fs::rename(target_path, &backup_path) {
+            Ok(()) => return Ok(backup_path),
+            Err(_) if fs::symlink_metadata(&backup_path).is_ok() => continue,
+            Err(_) => {
+                return Err(
+                    "Die vorhandene Sammlung konnte nicht sicher vorbereitet werden.".to_string(),
+                );
+            }
+        }
+    }
+
+    Err("Für die vorhandene Sammlung konnte keine Sicherungsdatei angelegt werden.".to_string())
+}
+
+#[cfg(windows)]
+fn replace_temporary_file(temporary_path: &Path, target_path: &Path) -> Result<(), String> {
+    if fs::rename(temporary_path, target_path).is_ok() {
+        return Ok(());
+    }
+
+    let metadata = fs::symlink_metadata(target_path)
+        .map_err(|_| "Die Sammlung konnte nicht sicher ersetzt werden.".to_string())?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err("Das ausgewählte Ziel ist keine reguläre Datei.".to_string());
+    }
+
+    let backup_path = move_target_to_backup(target_path)?;
+    if fs::rename(temporary_path, target_path).is_err() {
+        return match fs::rename(&backup_path, target_path) {
+            Ok(()) => Err(
+                "Die Sammlung konnte nicht ersetzt werden; die vorhandene Datei wurde wiederhergestellt."
+                    .to_string(),
+            ),
+            Err(_) => Err(format!(
+                "Die Sammlung konnte nicht ersetzt werden. Die vorhandenen Daten liegen weiterhin unter {}.",
+                backup_path.display()
+            )),
+        };
+    }
+
+    fs::remove_file(&backup_path).map_err(|_| {
+        format!(
+            "Die Sammlung wurde gespeichert, aber die temporäre Sicherung {} konnte nicht entfernt werden.",
+            backup_path.display()
+        )
+    })
+}
+
+#[cfg(unix)]
+fn sync_parent_directory(parent: &Path) {
+    if let Ok(directory) = File::open(parent) {
+        let _ = directory.sync_all();
+    }
+}
+
+#[cfg(not(unix))]
+fn sync_parent_directory(_parent: &Path) {}
 
 fn decode_windows_1252(bytes: &[u8]) -> String {
     bytes
@@ -171,14 +301,6 @@ fn write_collection_file(path: String, content: String) -> Result<(), String> {
         return Err("Die Sammlung ist größer als 32 MB.".to_string());
     }
 
-    if requested_path.exists() {
-        let metadata = fs::symlink_metadata(requested_path)
-            .map_err(|_| "Die vorhandene Datei konnte nicht geprüft werden.".to_string())?;
-        if metadata.file_type().is_symlink() || !metadata.is_file() {
-            return Err("Das ausgewählte Ziel ist keine reguläre Datei.".to_string());
-        }
-    }
-
     let parent = requested_path
         .parent()
         .ok_or_else(|| "Der Zielordner fehlt.".to_string())?;
@@ -191,9 +313,31 @@ fn write_collection_file(path: String, content: String) -> Result<(), String> {
         .file_name()
         .ok_or_else(|| "Der Dateiname fehlt.".to_string())?;
     let safe_path = canonical_parent.join(file_name);
+    validate_collection_target(&safe_path)?;
 
-    fs::write(safe_path, content)
-        .map_err(|_| "Die Sammlung konnte nicht gespeichert werden.".to_string())
+    let (temporary_file, mut file) = create_temporary_file(&canonical_parent)
+        .map_err(|_| "Die temporäre Sammlungsdatei konnte nicht angelegt werden.".to_string())?;
+    let write_result = (|| -> io::Result<()> {
+        file.write_all(content.as_bytes())?;
+        file.flush()?;
+        file.sync_all()
+    })();
+    drop(file);
+    write_result.map_err(|_| {
+        "Die Sammlung konnte nicht vollständig in die temporäre Datei geschrieben werden."
+            .to_string()
+    })?;
+
+    if let Some(permissions) = validate_collection_target(&safe_path)? {
+        fs::set_permissions(&temporary_file.path, permissions).map_err(|_| {
+            "Die Dateiberechtigungen der vorhandenen Sammlung konnten nicht übernommen werden."
+                .to_string()
+        })?;
+    }
+
+    replace_temporary_file(&temporary_file.path, &safe_path)?;
+    sync_parent_directory(&canonical_parent);
+    Ok(())
 }
 
 #[tauri::command]
