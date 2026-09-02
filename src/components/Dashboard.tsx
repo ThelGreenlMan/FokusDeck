@@ -9,8 +9,14 @@ type StudyTimer = ReturnType<typeof useStudyTimer>;
 interface DashboardProps {
   timer: StudyTimer;
   settings: TimerSettings;
+  focusGoal: string;
+  focusGoalLocked: boolean;
   cards: Flashcard[];
   onSettingsChange: (settings: TimerSettings) => void;
+  onFocusGoalChange: (goal: string) => void;
+  onTimerStart: () => void;
+  onTimerReset: () => void;
+  onTimerSkip: () => void;
   onOpenCards: () => void;
   onOpenLearning: () => void;
   onEnableOverlay: () => void;
@@ -19,8 +25,14 @@ interface DashboardProps {
 export function Dashboard({
   timer,
   settings,
+  focusGoal,
+  focusGoalLocked,
   cards,
   onSettingsChange,
+  onFocusGoalChange,
+  onTimerStart,
+  onTimerReset,
+  onTimerSkip,
   onOpenCards,
   onOpenLearning,
   onEnableOverlay,
@@ -50,12 +62,16 @@ export function Dashboard({
           remainingSeconds={timer.remainingSeconds}
           totalSeconds={timer.totalSeconds}
           isRunning={timer.isRunning}
+          phaseStarted={timer.phaseStarted}
           settings={settings}
-          onStart={timer.start}
+          focusGoal={focusGoal}
+          focusGoalLocked={focusGoalLocked}
+          onStart={onTimerStart}
           onPause={timer.pause}
-          onReset={timer.reset}
-          onSkip={timer.skip}
+          onReset={onTimerReset}
+          onSkip={onTimerSkip}
           onSettingsChange={onSettingsChange}
+          onFocusGoalChange={onFocusGoalChange}
         />
 
         <aside className="dashboard-side">

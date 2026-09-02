@@ -479,8 +479,98 @@ h2 {
 
 .timer-controls {
   display: flex;
+  min-width: 0;
   flex-direction: column;
-  gap: 27px;
+  gap: 18px;
+}
+
+.focus-goal-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  padding: 11px 13px 10px;
+  border: 1px solid #e3ded3;
+  border-radius: 12px;
+  color: var(--muted);
+  background: #fffdf8;
+  transition: 150ms ease;
+}
+
+.focus-goal-field:focus-within {
+  border-color: #9db9ad;
+  box-shadow: 0 0 0 3px rgba(46, 94, 78, 0.08);
+}
+
+.focus-goal-field > span,
+.focus-goal-display > span {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.focus-goal-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #e4e0d7;
+  border-radius: 8px;
+  color: var(--forest);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.focus-goal-field input::placeholder {
+  color: #68746f;
+  font-weight: 500;
+}
+
+.focus-goal-field--locked {
+  border-color: #d9e5df;
+  background: #eef4f1;
+}
+
+.focus-goal-field__value {
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.focus-goal-field small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.focus-goal-display {
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.focus-goal-display > span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--sun);
+  font-size: 8px;
+}
+
+.focus-goal-display strong {
+  display: -webkit-box;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow-wrap: anywhere;
+  overflow: hidden;
 }
 
 .timer-controls__buttons {
@@ -1796,7 +1886,7 @@ button:disabled {
 }
 
 .timer-card--compact .timer-controls {
-  gap: 0;
+  gap: 12px;
 }
 
 .timer-card--compact .timer-controls__buttons {
@@ -1820,6 +1910,47 @@ button:disabled {
   min-width: 94px;
   color: var(--forest);
   background: var(--sun);
+}
+
+@media (max-width: 390px) {
+  .timer-card--compact {
+    padding-inline: 12px;
+  }
+
+  .timer-card--compact .timer-card__body {
+    grid-template-columns: 120px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .timer-card--compact .timer-ring {
+    width: 116px;
+    height: 116px;
+  }
+
+  .timer-card--compact .timer-ring::before {
+    width: 104px;
+    height: 104px;
+  }
+
+  .timer-card--compact .timer-ring__inner strong {
+    font-size: 27px;
+  }
+
+  .timer-card--compact .timer-controls__buttons {
+    gap: 4px;
+  }
+
+  .timer-card--compact .icon-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .timer-card--compact .primary-timer-button {
+    min-width: 72px;
+    height: 40px;
+    padding-inline: 8px;
+    font-size: 10px;
+  }
 }
 
 @media (max-width: 1040px) {

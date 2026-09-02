@@ -5,6 +5,7 @@ FokusDeck ist eine lokale Desktop-App für konzentriertes Lernen. Sie kombiniert
 ## Funktionen in Version 0.4.0
 
 - Lern- und Pausendauer frei einstellen
+- Ein konkretes Lernziel je Fokusphase festlegen und im Overlay anzeigen
 - Timer starten, pausieren, zurücksetzen und Phasen überspringen
 - Akustisches Signal beim Phasenwechsel
 - Karteikarten in eigenen Stapeln erstellen und löschen
@@ -161,7 +162,7 @@ src-tauri/               Native Tauri-/Rust-Hülle
 
 ## Datenschutz
 
-Timer-Einstellungen, Karteikarten, Wiederholungsdaten, Prüfungsergebnisse und gespeicherte Lernentwürfe bleiben lokal auf dem Gerät. Es gibt kein Benutzerkonto und keine Cloud-Synchronisation. Frei formulierte Antworten werden nicht an einen externen Dienst gesendet. Bei einer verbundenen Obsidian-Bibliothek liest FokusDeck ausschließlich lokal markierte Markdown-Dateien; die Dateien werden nicht verändert.
+Timer-Einstellungen, Fokusziele, Karteikarten, Wiederholungsdaten, Prüfungsergebnisse und gespeicherte Lernentwürfe bleiben lokal auf dem Gerät. Es gibt kein Benutzerkonto und keine Cloud-Synchronisation. Frei formulierte Antworten werden nicht an einen externen Dienst gesendet. Bei einer verbundenen Obsidian-Bibliothek liest FokusDeck ausschließlich lokal markierte Markdown-Dateien; die Dateien werden nicht verändert.
 
 ## Lizenz
 
