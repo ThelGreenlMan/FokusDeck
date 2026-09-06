@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --port 1420",
     "build": "tsc --noEmit && vite build",
+    "check:release-policy": "node scripts/release-policy.mjs dependencies x86_64-pc-windows-msvc",
     "test": "vitest run",
     "preview": "vite preview",
     "tauri": "tauri"

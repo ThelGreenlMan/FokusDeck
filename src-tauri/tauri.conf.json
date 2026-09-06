@@ -34,7 +34,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "createUpdaterArtifacts": true,
     "shortDescription": "Fokus-Timer und Karteikarten in einer ruhigen Lernumgebung",
     "longDescription": "FokusDeck verbindet konfigurierbare Lernintervalle, digitale Karteikarten und ein Always-on-top-Overlay in einer lokalen Desktop-App.",

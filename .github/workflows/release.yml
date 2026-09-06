@@ -83,6 +83,7 @@ jobs:
       - run: pnpm build
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - run: pnpm check:release-policy
       - id: tauri
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         env:
@@ -97,11 +98,11 @@ jobs:
           prerelease: false
           generateReleaseNotes: true
           updaterJsonPreferNsis: true
-          args: --bundles nsis -- --locked
+          args: --target x86_64-pc-windows-msvc --bundles nsis -- --locked
       - name: Smoke-test native application startup
         shell: pwsh
         run: |
-          $app = Start-Process -FilePath "src-tauri/target/release/fokusdeck.exe" -PassThru
+          $app = Start-Process -FilePath "src-tauri/target/x86_64-pc-windows-msvc/release/fokusdeck.exe" -WindowStyle Hidden -PassThru
           if ($app.WaitForExit(5000)) {
             throw "FokusDeck exited during its startup smoke test. Exit code: $($app.ExitCode)"
           }
@@ -143,10 +144,13 @@ jobs:
           New-Item -ItemType Directory -Path release-verify | Out-Null
           gh release download "v$env:APP_VERSION" --pattern latest.json --dir release-verify
           $latest = Get-Content release-verify/latest.json -Raw | ConvertFrom-Json
+          $release | ConvertTo-Json -Depth 30 | Set-Content release-verify/release.json -Encoding utf8
+          node scripts/release-policy.mjs artifacts release-verify/release.json release-verify/latest.json
+          if ($LASTEXITCODE -ne 0) { throw 'Release assets violate the supported-platform policy.' }
           $installer = $installers[0]
           $signature = $signatures[0]
-          $installerPath = "src-tauri/target/release/bundle/nsis/$($installer.name)"
-          $signaturePath = "src-tauri/target/release/bundle/nsis/$($signature.name)"
+          $installerPath = "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/$($installer.name)"
+          $signaturePath = "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/$($signature.name)"
           $localSignature = (Get-Content $signaturePath -Raw).Trim()
           $localInstallerDigest = "sha256:$((Get-FileHash $installerPath -Algorithm SHA256).Hash.ToLowerInvariant())"
           $localSignatureDigest = "sha256:$((Get-FileHash $signaturePath -Algorithm SHA256).Hash.ToLowerInvariant())"

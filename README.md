@@ -70,15 +70,20 @@ pnpm test
 pnpm build
 ```
 
-Produktions-Build erstellen:
+Den unterstützten Windows-x64-Produktions-Build erstellen:
 
 ```powershell
-pnpm tauri build
+pnpm check:release-policy
+pnpm tauri build --target x86_64-pc-windows-msvc
 ```
 
 Der Windows-Installer erkennt eine vorhandene gleiche oder ältere FokusDeck-Version und ersetzt sie automatisch. Eine vorherige Deinstallation ist nicht nötig; lokale Karten, Sammlungen und Einstellungen bleiben erhalten. Ein Downgrade über eine neuere Version wird weiterhin nicht automatisch durchgeführt.
 
 In der installierten App kann unter **Einstellungen → FokusDeck aktualisieren** nach neuen Versionen gesucht werden. Ein verfügbares Update wird signaturgeprüft, heruntergeladen und mit einer kleinen Fortschrittsanzeige installiert; anschließend startet FokusDeck neu.
+
+Der Installer liegt danach unter `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/`.
+Linux- und macOS-Pakete werden derzeit nicht veröffentlicht. Details zum automatischen
+Plattformschutz und zur noch offenen Linux-Abhängigkeit stehen in [SECURITY.md](SECURITY.md).
 
 ## Lernmethoden
 
