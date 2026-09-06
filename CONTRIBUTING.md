@@ -7,7 +7,13 @@ Danke für dein Interesse an FokusDeck.
 1. Abhängigkeiten mit `pnpm install` installieren.
 2. Die Web-Oberfläche mit `pnpm dev` starten.
 3. Die vollständige Desktop-App mit `pnpm tauri dev` starten.
-4. Vor einem Pull Request `pnpm build` und `cargo fmt --manifest-path src-tauri/Cargo.toml --check` ausführen.
+4. Vor einem Pull Request `pnpm test`, `pnpm build` und `cargo fmt --manifest-path src-tauri/Cargo.toml --check` ausführen.
+5. Vor Änderungen am Windows-Paketbau außerdem `pnpm check:release-policy` ausführen.
+   Der Prüfer benötigt Cargo und testet den festgelegten Windows-x64-Abhängigkeitsbaum.
+
+Veröffentlichungen sind derzeit auf Windows x64/NSIS beschränkt. Die Release-Policy
+und ihre Tests müssen bei einer zukünftigen Plattformfreigabe bewusst zusammen
+angepasst werden; die Bedingungen für Linux stehen in [SECURITY.md](SECURITY.md).
 
 ## Pull Requests
 
