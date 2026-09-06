@@ -908,6 +908,88 @@ h2 {
   width: 15px;
 }
 
+.storage-recovery-list {
+  display: grid;
+  gap: 12px;
+  padding: 20px 24px 0;
+}
+
+.storage-recovery {
+  padding: 18px;
+  border: 1px solid #d5a06a;
+  border-radius: 12px;
+  color: #583919;
+  background: #fff7e7;
+  overflow-wrap: anywhere;
+}
+
+.storage-recovery h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.storage-recovery p {
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.storage-recovery__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.storage-recovery button,
+.storage-recovery-compact button {
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  color: inherit;
+  background: white;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.storage-recovery button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.storage-recovery__confirmation {
+  margin-top: 16px;
+  padding-top: 8px;
+  border-top: 1px solid #d5a06a;
+}
+
+.storage-recovery-compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  color: #583919;
+  background: #fff7e7;
+  font-size: 11px;
+}
+
+.storage-recovery-compact button {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.sidebar__bottom p.sidebar-storage-error {
+  color: #ffcf89;
+}
+
+.sidebar__bottom p.sidebar-storage-error span {
+  flex-shrink: 0;
+  background: #ffcf89;
+  box-shadow: none;
+}
+
 /* Flashcards */
 .page-intro--cards {
   align-items: center;
