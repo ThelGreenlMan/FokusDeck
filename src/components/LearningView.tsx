@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Flashcard } from "../types";
 import { usePersistentState } from "../hooks/usePersistentState";
+import { StorageRecoveryNotice, type StorageIssue } from "./StorageRecoveryNotice";
 import {
   dueLearningCards,
   errorLearningCards,
@@ -62,6 +63,8 @@ export interface LearningViewProps {
   notes: VaultNote[];
   hasObsidian: boolean;
   isVisible: boolean;
+  cardsStorageBlocked?: boolean;
+  onStorageIssuesChange?: (issues: StorageIssue[]) => void;
   onCardsChange: (cards: Flashcard[]) => void;
   onOpenCards: () => void;
   onOpenSettings: () => void;
@@ -88,16 +91,17 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function storedStrings(value: unknown, maximum = 200) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((item): item is string => typeof item === "string")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, maximum);
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > maximum ||
+      value.some((item) => typeof item !== "string" || !item.trim())) {
+    throw new Error("Eine gespeicherte Auswahlliste ist ungültig.");
+  }
+  return (value as string[]).map((item) => item.trim());
 }
 
 function normalizePlan(value: unknown): LearningPlan {
   const stored = asRecord(value);
+  if (!stored) throw new Error("Der gespeicherte Lernplan ist ungültig.");
   const selectedDecks = Array.from(
     new Set(storedStrings(stored?.selectedDecks, 100).map((deck) => deck.slice(0, 100))),
   );
@@ -122,8 +126,11 @@ function hasStringId(value: unknown): value is { id: string } {
 }
 
 function storedEntries<T extends { id: string }>(value: unknown) {
-  if (!Array.isArray(value)) return [];
-  return value.filter(hasStringId).slice(0, MAX_HISTORY_ENTRIES) as T[];
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_HISTORY_ENTRIES || !value.every(hasStringId)) {
+    throw new Error("Ein gespeicherter Lerneintrag ist ungültig.");
+  }
+  return value as T[];
 }
 
 function isSq3rEntry(value: unknown): value is Sq3rEntry {
@@ -154,9 +161,9 @@ function isSq3rEntry(value: unknown): value is Sq3rEntry {
 
 function normalizeJournal(value: unknown): LearningJournal {
   const stored = asRecord(value);
-  const sq3r = Array.isArray(stored?.sq3r)
-    ? stored.sq3r.filter(isSq3rEntry).slice(0, MAX_HISTORY_ENTRIES)
-    : [];
+  if (!stored) throw new Error("Das gespeicherte Lernjournal ist ungültig.");
+  const sq3r = storedEntries<Sq3rEntry>(stored.sq3r);
+  if (!sq3r.every(isSq3rEntry)) throw new Error("Ein gespeicherter SQ3R-Eintrag ist ungültig.");
   return {
     exams: storedEntries<ExamEntry>(stored?.exams),
     feynman: storedEntries<FeynmanEntry>(stored?.feynman),
@@ -166,8 +173,9 @@ function normalizeJournal(value: unknown): LearningJournal {
 }
 
 function normalizeDailySession(value: unknown): DailySessionSnapshot | null {
+  if (value === null) return null;
   const stored = asRecord(value);
-  if (!stored) return null;
+  if (!stored) throw new Error("Die gespeicherte Lernrunde ist ungültig.");
 
   const queueIds = storedStrings(stored.queueIds, 200);
   const answers = asRecord(stored.answers);
@@ -184,7 +192,7 @@ function normalizeDailySession(value: unknown): DailySessionSnapshot | null {
     !Array.isArray(stored.requeuedIds) ||
     typeof stored.startedAt !== "string"
   ) {
-    return null;
+    throw new Error("Die gespeicherte Lernrunde ist unvollständig.");
   }
 
   const ratings: Record<string, ReviewRating> = {};
@@ -196,12 +204,15 @@ function normalizeDailySession(value: unknown): DailySessionSnapshot | null {
       rating === "easy"
     ) {
       ratings[cardId] = rating;
+    } else {
+      throw new Error("Eine gespeicherte Bewertung ist ungültig.");
     }
   }
 
   const safeAnswers: Record<string, string> = {};
   for (const [cardId, answer] of Object.entries(answers)) {
-    if (typeof answer === "string") safeAnswers[cardId] = answer.slice(0, 4_000);
+    if (typeof answer !== "string") throw new Error("Eine gespeicherte Antwort ist ungültig.");
+    safeAnswers[cardId] = answer.slice(0, 4_000);
   }
 
   const countFor = (rating: ReviewRating) => {
@@ -311,26 +322,34 @@ export function LearningView({
   notes,
   hasObsidian,
   isVisible,
+  cardsStorageBlocked = false,
+  onStorageIssuesChange,
   onCardsChange,
   onOpenCards,
   onOpenSettings,
 }: LearningViewProps) {
   const [clock, setClock] = useState(() => Date.now());
   const [activeMode, setActiveMode] = useState<LearningMode | null>(null);
-  const [storedPlan, setStoredPlan, planStorageError] = usePersistentState<LearningPlan | null>(
+  const [plan, setStoredPlan, planStorageError, planRecovery] = usePersistentState<LearningPlan>(
     LEARNING_PLAN_KEY,
     initialPlan,
+    normalizePlan,
   );
-  const [storedDailySession, setStoredDailySession, sessionStorageError] =
-    usePersistentState<DailySessionSnapshot | null>(DAILY_SESSION_KEY, null);
-  const [storedJournal, setStoredJournal, journalStorageError] = usePersistentState<LearningJournal | null>(
+  const [storedDailySession, setStoredDailySession, sessionStorageError, sessionRecovery] =
+    usePersistentState<DailySessionSnapshot | null>(DAILY_SESSION_KEY, null, normalizeDailySession);
+  const [journal, setStoredJournal, journalStorageError, journalRecovery] = usePersistentState<LearningJournal>(
     LEARNING_JOURNAL_KEY,
     initialJournal,
+    normalizeJournal,
   );
-  const plan = normalizePlan(storedPlan);
-  const journal = normalizeJournal(storedJournal);
-  const normalizedSession = normalizeDailySession(storedDailySession);
-  const dailySession = sessionForExistingCards(normalizedSession, cards);
+  const dailySession = cardsStorageBlocked ? storedDailySession : sessionForExistingCards(storedDailySession, cards);
+  const storageBlocked = cardsStorageBlocked || planRecovery.blocked || sessionRecovery.blocked || journalRecovery.blocked;
+  const storageIssues = useMemo<StorageIssue[]>(() => [
+    { title: "Lernplan", error: planStorageError, recovery: planRecovery },
+    { title: "Lernrunde", error: sessionStorageError, recovery: sessionRecovery },
+    { title: "Lernjournal", error: journalStorageError, recovery: journalRecovery },
+  ].filter((issue) => issue.error), [planStorageError, planRecovery, sessionStorageError, sessionRecovery, journalStorageError, journalRecovery]);
+  useEffect(() => { onStorageIssuesChange?.(storageIssues); }, [onStorageIssuesChange, storageIssues]);
   const cardsRef = useRef(cards);
   cardsRef.current = cards;
 
@@ -376,12 +395,12 @@ export function LearningView({
     : 0;
   const hasSavedSession = Boolean(dailySession && validSavedQueueLength > 0);
   const sq3rDraft = newestIncompleteSq3r(journal.sq3r);
-  const storageError = planStorageError || sessionStorageError || journalStorageError;
-  const storageNotice = storageError ? (
-    <p className="learning-form-error" role="alert">{storageError}</p>
-  ) : null;
+  const storageNotice = !onStorageIssuesChange
+    ? storageIssues.map((issue) => <StorageRecoveryNotice key={issue.title} {...issue} />)
+    : null;
 
   useEffect(() => {
+    if (cardsStorageBlocked || sessionRecovery.blocked) return;
     if (storedDailySession !== null && (!dailySession || !validSavedQueueLength)) {
       setStoredDailySession(null);
     } else if (
@@ -390,7 +409,7 @@ export function LearningView({
     ) {
       setStoredDailySession(dailySession);
     }
-  }, [dailySession, setStoredDailySession, storedDailySession, validSavedQueueLength]);
+  }, [cardsStorageBlocked, sessionRecovery.blocked, dailySession, setStoredDailySession, storedDailySession, validSavedQueueLength]);
 
   const changePlan = (changes: Partial<LearningPlan>) => {
     setStoredPlan({
@@ -507,6 +526,16 @@ export function LearningView({
       return { ...safe, sq3r: upsertHistory(safe.sq3r, entry) };
     });
   };
+
+  if (storageBlocked) {
+    return (
+      <main className="page-content learning-page">
+        {storageNotice}
+        <h1>Gespeicherte Lerndaten wiederherstellen</h1>
+        <p>Bitte kläre zuerst die Speicherfehler oben. Deine Lernrunde bleibt bis dahin erhalten.</p>
+      </main>
+    );
+  }
 
   if (activeMode === "cards" && dailySession) {
     return (
