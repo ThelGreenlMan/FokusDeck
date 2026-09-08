@@ -3,6 +3,7 @@ import type { useStudyTimer } from "../hooks/useStudyTimer";
 import { CardsIcon, CheckIcon, ClockIcon, PinIcon } from "./Icons";
 import { TimerCard } from "./TimerCard";
 import { summarizeLearning } from "../lib/learning";
+import { useI18n } from "../i18n";
 
 type StudyTimer = ReturnType<typeof useStudyTimer>;
 
@@ -37,22 +38,20 @@ export function Dashboard({
   onOpenLearning,
   onEnableOverlay,
 }: DashboardProps) {
+  const { t, formatNumber } = useI18n();
   const learning = summarizeLearning(cards, new Date());
 
   return (
     <main className="page-content">
       <header className="page-intro">
         <div>
-          <p className="eyebrow">Dein Lernraum</p>
-          <h1>Bereit für konzentriertes Lernen?</h1>
-          <p>
-            Stell deinen Rhythmus ein, blende Ablenkungen aus und festige dein
-            Wissen Karte für Karte.
-          </p>
+          <p className="eyebrow">{t("dashboard.eyebrow")}</p>
+          <h1>{t("dashboard.heading")}</h1>
+          <p>{t("dashboard.intro")}</p>
         </div>
         <button type="button" className="overlay-button" onClick={onEnableOverlay}>
           <PinIcon />
-          Overlay starten
+          {t("dashboard.startOverlay")}
         </button>
       </header>
 
@@ -78,8 +77,8 @@ export function Dashboard({
           <section className="stat-panel">
             <div className="section-heading section-heading--small">
               <div>
-                <p className="eyebrow">Heute</p>
-                <h2>Dein Fortschritt</h2>
+                <p className="eyebrow">{t("dashboard.today")}</p>
+                <h2>{t("dashboard.progress")}</h2>
               </div>
             </div>
 
@@ -89,8 +88,8 @@ export function Dashboard({
                   <ClockIcon />
                 </span>
                 <div>
-                  <strong>{timer.completedSessions}</strong>
-                  <span>Fokusphasen</span>
+                  <strong>{formatNumber(timer.completedSessions)}</strong>
+                  <span>{t("dashboard.focusSessions")}</span>
                 </div>
               </div>
               <div className="stat-row">
@@ -98,8 +97,8 @@ export function Dashboard({
                   <CheckIcon />
                 </span>
                 <div>
-                  <strong>{learning.dueNow}</strong>
-                  <span>heute fällige Karten</span>
+                  <strong>{formatNumber(learning.dueNow)}</strong>
+                  <span>{t("dashboard.dueCards")}</span>
                 </div>
               </div>
               <div className="stat-row">
@@ -107,8 +106,8 @@ export function Dashboard({
                   <CardsIcon />
                 </span>
                 <div>
-                  <strong>{learning.matureCards}</strong>
-                  <span>langfristig gefestigt</span>
+                  <strong>{formatNumber(learning.matureCards)}</strong>
+                  <span>{t("dashboard.matureCards")}</span>
                 </div>
               </div>
             </div>
@@ -116,8 +115,8 @@ export function Dashboard({
 
           <button type="button" className="deck-shortcut" onClick={onOpenLearning}>
             <span>
-              <small>Heute lernen</small>
-              <strong>{cards.length ? `${learning.dueNow} Karten sind jetzt fällig` : "Erstelle deine erste Karte"}</strong>
+              <small>{t("app.nav.learning")}</small>
+              <strong>{cards.length ? t("dashboard.cardsNow", { count: learning.dueNow }) : t("dashboard.firstCard")}</strong>
             </span>
             <span className="deck-shortcut__cards" aria-hidden="true">
               <i />
@@ -127,7 +126,7 @@ export function Dashboard({
           </button>
           {cards.length === 0 && (
             <button type="button" className="text-button" onClick={onOpenCards}>
-              Karteikarten anlegen
+              {t("dashboard.createCards")}
             </button>
           )}
         </aside>
@@ -136,11 +135,8 @@ export function Dashboard({
       <section className="focus-tip">
         <span className="focus-tip__icon">✦</span>
         <div>
-          <strong>Ein kleiner Fokus-Tipp</strong>
-          <p>
-            Formuliere vor dem Start ein konkretes Lernziel. „Kapitel 3
-            zusammenfassen“ ist leichter zu beginnen als „Mathe lernen“.
-          </p>
+          <strong>{t("dashboard.tipHeading")}</strong>
+          <p>{t("dashboard.tip")}</p>
         </div>
       </section>
     </main>

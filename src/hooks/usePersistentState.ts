@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useI18n } from "../i18n";
 
 export function usePersistentState<T>(
   key: string,
   initialValue: T,
   normalize?: (value: unknown) => T,
 ) {
+  const { t } = useI18n();
   const [value, setValue] = useState<T>(() => {
     try {
       const storedValue = localStorage.getItem(key);
@@ -15,18 +17,16 @@ export function usePersistentState<T>(
       return initialValue;
     }
   });
-  const [storageError, setStorageError] = useState("");
+  const [storageFailed, setStorageFailed] = useState(false);
 
   useEffect(() => {
     try {
       localStorage.setItem(key, JSON.stringify(value));
-      setStorageError("");
+      setStorageFailed(false);
     } catch {
-      setStorageError(
-        "Die lokale Speicherung ist voll oder nicht verfügbar. Bitte sichere deine Sammlungen, bevor du die App schließt.",
-      );
+      setStorageFailed(true);
     }
   }, [key, value]);
 
-  return [value, setValue, storageError] as const;
+  return [value, setValue, storageFailed ? t("app.storageFailed") : ""] as const;
 }

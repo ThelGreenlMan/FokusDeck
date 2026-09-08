@@ -1,4 +1,7 @@
+import { useI18n } from "../i18n";
+
 export function Brand({ compact = false }: { compact?: boolean }) {
+  const { t } = useI18n();
   return (
     <div className={`brand ${compact ? "brand--compact" : ""}`}>
       <div className="brand__mark" aria-hidden="true">
@@ -9,7 +12,7 @@ export function Brand({ compact = false }: { compact?: boolean }) {
       </div>
       <div>
         <strong>FokusDeck</strong>
-        {!compact && <span>Lernen mit System</span>}
+        {!compact && <span>{t("app.tagline")}</span>}
       </div>
     </div>
   );

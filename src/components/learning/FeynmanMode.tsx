@@ -1,5 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { useI18n } from "../../i18n";
+import { renderMethodMessage, type MethodMessage } from "./methodMessages";
 
 const MAX_TOPIC_LENGTH = 200;
 const MAX_EXPLANATION_LENGTH = 6_000;
@@ -50,6 +52,7 @@ export function FeynmanMode({
   onCreateCard,
   onClose,
 }: FeynmanModeProps) {
+  const { t } = useI18n();
   const formRef = useRef<HTMLFormElement>(null);
   const savedDraftRef = useRef("");
   const headingId = useId();
@@ -59,6 +62,8 @@ export function FeynmanMode({
   const [entryId] = useState(createId);
   const [createdAt] = useState(() => new Date().toISOString());
   const deckOptions = useMemo(() => availableDecks(decks), [decks]);
+  const isFallbackDeck = (deck: string) =>
+    deck === "Allgemein" && !decks.some((candidate) => candidate.trim() === deck);
   const [draft, setDraft] = useState<FeynmanDraft>(() => ({
     topic: "",
     explanation: "",
@@ -67,7 +72,7 @@ export function FeynmanMode({
     simplifiedExplanation: "",
     deck: availableDecks(decks)[0],
   }));
-  const [feedback, setFeedback] = useState("");
+  const [feedback, setFeedback] = useState<MethodMessage | null>(null);
 
   useEffect(() => {
     if (!deckOptions.includes(draft.deck)) {
@@ -86,7 +91,7 @@ export function FeynmanMode({
 
   const validateForm = () => {
     if (formRef.current?.reportValidity() === false) {
-      setFeedback("Bitte fülle alle Felder aus, bevor du fortfährst.");
+      setFeedback({ key: "methods.feynman.fillFields" });
       return false;
     }
     return true;
@@ -103,17 +108,17 @@ export function FeynmanMode({
       createdAt,
     });
     savedDraftRef.current = JSON.stringify(values);
-    setFeedback("Dein Feynman-Eintrag wurde gespeichert.");
+    setFeedback({ key: "methods.feynman.saved" });
   };
 
   const createCard = () => {
     const values = normalizedDraft();
     if (!values.topic || !values.explanation || !values.simplifiedExplanation) {
-      setFeedback("Vervollständige zuerst Thema und beide Erklärungen.");
+      setFeedback({ key: "methods.feynman.completeExplanations" });
       return;
     }
     if (!values.knowledgeGap || !values.gapAnswer) {
-      setFeedback("Formuliere für die Karte eine Wissenslücke und die passende Antwort.");
+      setFeedback({ key: "methods.feynman.completeGap" });
       return;
     }
 
@@ -125,7 +130,11 @@ export function FeynmanMode({
     onSave({ ...values, id: entryId, createdAt });
     savedDraftRef.current = JSON.stringify(values);
     setFeedback(
-      `Die Wissenslücke wurde als Karte im Stapel „${values.deck}“ erstellt.`,
+      {
+        key: "methods.gapCardCreated",
+        params: { deck: values.deck },
+        ...(isFallbackDeck(values.deck) ? { translatedParams: { deck: "methods.generalDeck" } } : {}),
+      },
     );
   };
 
@@ -141,7 +150,7 @@ export function FeynmanMode({
     if (
       hasUnsavedWork &&
       savedDraftRef.current !== JSON.stringify(values) &&
-      !window.confirm("Feynman-Methode beenden und ungespeicherte Eingaben verwerfen?")
+      !window.confirm(t("methods.feynman.confirmClose"))
     ) {
       return;
     }
@@ -152,37 +161,36 @@ export function FeynmanMode({
     <section className="learning-mode" aria-labelledby={headingId}>
       <header className="learning-mode-header">
         <div className="learning-mode-heading">
-          <p className="learning-eyebrow">Feynman-Methode</p>
-          <h1 id={headingId}>Erkläre es mit deinen eigenen Worten</h1>
+          <p className="learning-eyebrow">{t("methods.feynman.name")}</p>
+          <h1 id={headingId}>{t("methods.feynman.heading")}</h1>
           <p>
-            Schreibe so, als würdest du das Thema einer Person ohne Vorwissen
-            erklären. Unklare Stellen hältst du anschließend als Wissenslücke fest.
+            {t("methods.feynman.intro")}
           </p>
         </div>
         <button type="button" className="learning-close-button" onClick={closeMode}>
-          Modus schließen
+          {t("methods.close")}
         </button>
       </header>
 
       <form ref={formRef} className="learning-form" onSubmit={saveEntry}>
         <label className="learning-field">
-          <span>Thema</span>
+          <span>{t("methods.topic")}</span>
           <input
             type="text"
             value={draft.topic}
             onChange={(event) => {
               setDraft((current) => ({ ...current, topic: event.target.value }));
-              setFeedback("");
+              setFeedback(null);
             }}
             maxLength={MAX_TOPIC_LENGTH}
-            placeholder="z. B. Photosynthese"
+            placeholder={t("methods.feynman.topicPlaceholder")}
             autoFocus
             required
           />
         </label>
 
         <label className="learning-field">
-          <span>1. Erste Erklärung in einfachen Worten</span>
+          <span>{t("methods.feynman.first")}</span>
           <textarea
             value={draft.explanation}
             onChange={(event) => {
@@ -190,22 +198,21 @@ export function FeynmanMode({
                 ...current,
                 explanation: event.target.value,
               }));
-              setFeedback("");
+              setFeedback(null);
             }}
             maxLength={MAX_EXPLANATION_LENGTH}
             rows={9}
-            placeholder="Erkläre das Thema ohne Fachsprache und in kurzen, verständlichen Schritten."
+            placeholder={t("methods.feynman.explanationPlaceholder")}
             aria-describedby={explanationHintId}
             required
           />
           <small id={explanationHintId}>
-            Prüfe selbst, ob deine Erklärung vollständig und verständlich ist. FokusDeck
-            bewertet deinen Text nicht automatisch.
+            {t("methods.feynman.selfAssessment")}
           </small>
         </label>
 
         <label className="learning-field">
-          <span>2. Gefundene Wissenslücke</span>
+          <span>{t("methods.feynman.gap")}</span>
           <textarea
             value={draft.knowledgeGap}
             onChange={(event) => {
@@ -213,34 +220,34 @@ export function FeynmanMode({
                 ...current,
                 knowledgeGap: event.target.value,
               }));
-              setFeedback("");
+              setFeedback(null);
             }}
             maxLength={MAX_KNOWLEDGE_GAP_LENGTH}
             rows={4}
-            placeholder="Formuliere als Frage, was dir noch unklar ist."
+            placeholder={t("methods.feynman.gapPlaceholder")}
             aria-describedby={knowledgeGapHintId}
           />
           <small id={knowledgeGapHintId}>
-            Wenn dir nichts mehr unklar ist, darf dieses Feld leer bleiben.
+            {t("methods.feynman.gapOptional")}
           </small>
         </label>
 
         <label className="learning-field">
-          <span>3. Antwort auf die Wissenslücke</span>
+          <span>{t("methods.feynman.answerGap")}</span>
           <textarea
             value={draft.gapAnswer}
             onChange={(event) => {
               setDraft((current) => ({ ...current, gapAnswer: event.target.value }));
-              setFeedback("");
+              setFeedback(null);
             }}
             maxLength={MAX_GAP_ANSWER_LENGTH}
             rows={5}
-            placeholder="Arbeite die unklare Stelle nach und notiere die präzise Antwort."
+            placeholder={t("methods.feynman.answerPlaceholder")}
           />
         </label>
 
         <label className="learning-field">
-          <span>4. Noch einfacher neu erklären</span>
+          <span>{t("methods.feynman.simplify")}</span>
           <textarea
             value={draft.simplifiedExplanation}
             onChange={(event) => {
@@ -248,27 +255,27 @@ export function FeynmanMode({
                 ...current,
                 simplifiedExplanation: event.target.value,
               }));
-              setFeedback("");
+              setFeedback(null);
             }}
             maxLength={MAX_EXPLANATION_LENGTH}
             rows={7}
-            placeholder="Schreibe deine verbesserte Erklärung noch einmal kurz und ohne unnötige Fachbegriffe."
+            placeholder={t("methods.feynman.simplifyPlaceholder")}
             required
           />
         </label>
 
         <label className="learning-field">
-          <span>Stapel für die neue Karte</span>
+          <span>{t("methods.newCardDeck")}</span>
           <select
             value={draft.deck}
             onChange={(event) => {
               setDraft((current) => ({ ...current, deck: event.target.value }));
-              setFeedback("");
+              setFeedback(null);
             }}
           >
             {deckOptions.map((deck) => (
               <option key={deck} value={deck}>
-                {deck}
+                {isFallbackDeck(deck) ? t("methods.generalDeck") : deck}
               </option>
             ))}
           </select>
@@ -276,14 +283,14 @@ export function FeynmanMode({
 
         <div className="learning-form-actions">
           <button type="submit" className="learning-secondary-button">
-            Eintrag speichern
+            {t("methods.feynman.save")}
           </button>
           <button
             type="button"
             className="learning-primary-button"
             onClick={createCard}
           >
-            Wissenslücke als Karte erstellen
+            {t("methods.feynman.createCard")}
           </button>
         </div>
 
@@ -293,7 +300,7 @@ export function FeynmanMode({
           role="status"
           aria-live="polite"
         >
-          {feedback}
+          {renderMethodMessage(feedback)}
         </p>
       </form>
     </section>

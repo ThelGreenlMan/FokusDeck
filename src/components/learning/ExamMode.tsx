@@ -16,6 +16,7 @@ import {
   type ReviewRating,
 } from "../../lib/learning";
 import type { Flashcard } from "../../types";
+import { formatNumber, t, useI18n } from "../../i18n";
 
 const TIME_LIMITS = [5, 10, 20, 30] as const;
 const MAX_EXAM_CARDS = 30;
@@ -71,23 +72,23 @@ function createId() {
   return `exam-${Date.now()}-${fallbackIdCounter}`;
 }
 
-function collectDecks(cards: readonly Flashcard[]) {
+function collectDecks(cards: readonly Flashcard[], locale: string) {
   return Array.from(
     new Set(cards.map((card) => card.deck.trim() || "Ohne Stapel")),
-  ).sort((first, second) => first.localeCompare(second, "de-DE"));
+  ).sort((first, second) => first.localeCompare(second, locale));
 }
 
 function formatTime(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
+  return formatNumber(minutes, { minimumIntegerDigits: 2, useGrouping: false }) + ":" + formatNumber(seconds, { minimumIntegerDigits: 2, useGrouping: false });
 }
 
 function judgementLabel(judgement: ExamJudgement) {
-  if (judgement === "correct") return "Richtig";
-  if (judgement === "partial") return "Teilweise richtig";
-  if (judgement === "incorrect") return "Falsch";
-  return "Nicht beantwortet";
+  if (judgement === "correct") return t("methods.exam.correct");
+  if (judgement === "partial") return t("methods.exam.partial");
+  if (judgement === "incorrect") return t("methods.exam.incorrect");
+  return t("methods.exam.unanswered");
 }
 
 function ratingFor(judgement: Exclude<ExamJudgement, "unanswered">): ExamRating {
@@ -103,13 +104,14 @@ export function ExamMode({
   onSave,
   onClose,
 }: ExamModeProps) {
+  const { t, locale } = useI18n();
   const headingId = useId();
   const deckHintId = useId();
   const answerHintId = useId();
-  const decks = useMemo(() => collectDecks(cards), [cards]);
+  const decks = useMemo(() => collectDecks(cards, locale), [cards, locale]);
   const [phase, setPhase] = useState<ExamPhase>("configuration");
   const [selectedDecks, setSelectedDecks] = useState<string[]>(() =>
-    collectDecks(cards),
+    collectDecks(cards, locale),
   );
   const [cardCount, setCardCount] = useState(() =>
     Math.min(10, Math.max(1, cards.length)),
@@ -315,11 +317,11 @@ export function ExamMode({
   const startExam = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (selectedDecks.length === 0) {
-      setConfigurationError("Wähle mindestens einen Stapel aus.");
+      setConfigurationError("methods.exam.selectDeckError");
       return;
     }
     if (availableCards.length === 0) {
-      setConfigurationError("Die gewählten Stapel enthalten keine nutzbaren Karten.");
+      setConfigurationError("methods.exam.noCardsError");
       return;
     }
 
@@ -446,11 +448,10 @@ export function ExamMode({
       <section className="learning-exam" aria-labelledby={headingId}>
         <header className="learning-mode-header">
           <div className="learning-mode-heading">
-            <p className="learning-eyebrow">Prüfungsmodus</p>
-            <h1 id={headingId} ref={phaseHeadingRef} tabIndex={-1}>Prüfung zusammenstellen</h1>
+            <p className="learning-eyebrow">{t("methods.exam.name")}</p>
+            <h1 id={headingId} ref={phaseHeadingRef} tabIndex={-1}>{t("methods.exam.configure")}</h1>
             <p>
-              Beantworte zufällige Karten schriftlich und bewerte dich anschließend
-              ehrlich anhand der Musterlösung.
+              {t("methods.exam.intro")}
             </p>
           </div>
           <button
@@ -458,14 +459,14 @@ export function ExamMode({
             className="learning-close-button"
             onClick={closeMode}
           >
-            Modus schließen
+            {t("methods.close")}
           </button>
         </header>
 
         {cards.length === 0 ? (
           <div className="learning-empty-state" role="status">
-            <h3>Noch keine Prüfung möglich</h3>
-            <p>Lege zuerst Karteikarten an oder importiere eine Sammlung.</p>
+            <h3>{t("methods.exam.emptyHeading")}</h3>
+            <p>{t("methods.exam.emptyHint")}</p>
           </div>
         ) : (
           <form className="learning-form" onSubmit={startExam}>
@@ -473,9 +474,9 @@ export function ExamMode({
               className="learning-deck-selection"
               aria-describedby={deckHintId}
             >
-              <legend>Stapel auswählen</legend>
+              <legend>{t("methods.exam.chooseDecks")}</legend>
               <p id={deckHintId}>
-                Du kannst einen oder mehrere Stapel in derselben Prüfung verwenden.
+                {t("methods.exam.deckHint")}
               </p>
               <div className="learning-selection-actions">
                 <button
@@ -486,14 +487,14 @@ export function ExamMode({
                     setConfigurationError("");
                   }}
                 >
-                  Alle auswählen
+                  {t("methods.selectAll")}
                 </button>
                 <button
                   type="button"
                   className="learning-text-button"
                   onClick={() => setSelectedDecks([])}
                 >
-                  Auswahl aufheben
+                  {t("methods.deselectAll")}
                 </button>
               </div>
               <div className="learning-deck-options">
@@ -508,9 +509,11 @@ export function ExamMode({
                         checked={selectedDecks.includes(deck)}
                         onChange={(event) => toggleDeck(deck, event.target.checked)}
                       />
-                      <span>{deck}</span>
+                      <span>{deck === "Ohne Stapel" && !cards.some((card) => card.deck.trim() === deck)
+                        ? t("methods.noDeck")
+                        : deck}</span>
                       <small>
-                        {deckCardCount} {deckCardCount === 1 ? "Karte" : "Karten"}
+                        {t("methods.cards", { count: deckCardCount })}
                       </small>
                     </label>
                   );
@@ -520,7 +523,7 @@ export function ExamMode({
 
             <div className="learning-exam-options">
               <label className="learning-field">
-                <span>Anzahl der Karten</span>
+                <span>{t("methods.exam.cardCount")}</span>
                 <input
                   type="number"
                   min={1}
@@ -542,13 +545,12 @@ export function ExamMode({
                   required
                 />
                 <small>
-                  {availableCards.length} Karten in der aktuellen Auswahl verfügbar,
-                  maximal {MAX_EXAM_CARDS} pro Prüfung.
+                  {t("methods.exam.availableCards", { count: availableCards.length, max: MAX_EXAM_CARDS })}
                 </small>
               </label>
 
               <label className="learning-field">
-                <span>Zeitlimit</span>
+                <span>{t("methods.exam.timeLimit")}</span>
                 <select
                   value={timeLimitMinutes}
                   onChange={(event) =>
@@ -557,7 +559,7 @@ export function ExamMode({
                 >
                   {TIME_LIMITS.map((minutes) => (
                     <option key={minutes} value={minutes}>
-                      {minutes} Minuten
+                      {t("methods.minutes", { count: minutes })}
                     </option>
                   ))}
                 </select>
@@ -571,16 +573,16 @@ export function ExamMode({
                 onChange={(event) => setMixedTopics(event.target.checked)}
               />
               <span>
-                <strong>Themen mischen</strong>
+                <strong>{t("methods.exam.mix")}</strong>
                 <small>
-                  Karten aus verschiedenen Stapeln wechseln sich möglichst ab.
+                  {t("methods.exam.mixHint")}
                 </small>
               </span>
             </label>
 
             {configurationError && (
               <p className="learning-form-error" role="alert">
-                {configurationError}
+                {t(configurationError)}
               </p>
             )}
 
@@ -590,7 +592,7 @@ export function ExamMode({
                 className="learning-primary-button"
                 disabled={availableCards.length === 0}
               >
-                Prüfung starten
+                {t("methods.exam.start")}
               </button>
             </div>
           </form>
@@ -607,14 +609,12 @@ export function ExamMode({
       <section className="learning-exam learning-exam--complete" aria-labelledby={headingId}>
         <header className="learning-mode-header">
           <div className="learning-mode-heading">
-            <p className="learning-eyebrow">Prüfung abgeschlossen</p>
+            <p className="learning-eyebrow">{t("methods.exam.complete")}</p>
             <h1 id={headingId} ref={phaseHeadingRef} tabIndex={-1}>
-              {result.score.passed ? "Bestanden" : "Weiter üben"}
+              {result.score.passed ? t("methods.exam.passed") : t("methods.exam.keepPractising")}
             </h1>
             <p role="status">
-              {result.score.earnedPoints.toLocaleString("de-DE")} von{" "}
-              {result.score.maximumPoints.toLocaleString("de-DE")} Punkten ·{" "}
-              {result.score.percentage.toLocaleString("de-DE")} Prozent
+              {t("methods.exam.score", { earned: result.score.earnedPoints, maximum: result.score.maximumPoints, percentage: result.score.percentage })}
             </p>
           </div>
           <button
@@ -622,40 +622,39 @@ export function ExamMode({
             className="learning-close-button"
             onClick={closeMode}
           >
-            Modus schließen
+            {t("methods.close")}
           </button>
         </header>
 
         {result.timedOut && (
           <p className="learning-timeout-notice" role="status">
-            Das Zeitlimit ist abgelaufen. Offene Karten wurden als nicht beantwortet
-            gewertet und für eine Wiederholung eingeplant.
+            {t("methods.exam.timedOut")}
           </p>
         )}
 
         <dl className="learning-summary-grid">
           <div>
-            <dt>Richtig</dt>
-            <dd>{result.score.correct}</dd>
+            <dt>{t("methods.exam.correct")}</dt>
+            <dd>{formatNumber(result.score.correct)}</dd>
           </div>
           <div>
-            <dt>Teilweise</dt>
-            <dd>{result.score.partial}</dd>
+            <dt>{t("methods.exam.partialShort")}</dt>
+            <dd>{formatNumber(result.score.partial)}</dd>
           </div>
           <div>
-            <dt>Falsch</dt>
-            <dd>{result.score.incorrect}</dd>
+            <dt>{t("methods.exam.incorrect")}</dt>
+            <dd>{formatNumber(result.score.incorrect)}</dd>
           </div>
           <div>
-            <dt>Offen</dt>
-            <dd>{result.score.unanswered}</dd>
+            <dt>{t("methods.exam.remaining")}</dt>
+            <dd>{formatNumber(result.score.unanswered)}</dd>
           </div>
         </dl>
 
         <section className="learning-error-analysis" aria-labelledby={headingId + "-errors"}>
-          <h3 id={headingId + "-errors"}>Fehleranalyse</h3>
+          <h3 id={headingId + "-errors"}>{t("methods.exam.errors")}</h3>
           {errorAnswers.length === 0 ? (
-            <p>Alle Antworten waren richtig. Sehr gut!</p>
+            <p>{t("methods.exam.allCorrect")}</p>
           ) : (
             <ol className="learning-answer-list">
               {errorAnswers.map((answer) => (
@@ -668,11 +667,11 @@ export function ExamMode({
                     <span>{judgementLabel(answer.judgement)}</span>
                   </header>
                   <p>
-                    <b>Deine Antwort:</b>{" "}
-                    {answer.givenAnswer || "Keine Antwort eingegeben"}
+                    <b>{t("methods.yourAnswerColon")}</b>{" "}
+                    {answer.givenAnswer || t("methods.exam.noAnswer")}
                   </p>
                   <p>
-                    <b>Musterlösung:</b> {answer.expectedAnswer}
+                    <b>{t("methods.exam.modelAnswerColon")}</b> {answer.expectedAnswer}
                   </p>
                 </li>
               ))}
@@ -681,22 +680,22 @@ export function ExamMode({
         </section>
 
         <details className="learning-all-answers">
-          <summary>Alle Antworten anzeigen</summary>
+          <summary>{t("methods.exam.showAll")}</summary>
           <ol className="learning-answer-list">
             {result.answers.map((answer) => (
               <li className="learning-answer-review" key={answer.cardId}>
                 <header>
                   <strong>
-                    {answer.position}. {answer.question}
+                    {formatNumber(answer.position)}. {answer.question}
                   </strong>
                   <span>{judgementLabel(answer.judgement)}</span>
                 </header>
                 <p>
-                  <b>Deine Antwort:</b>{" "}
-                  {answer.givenAnswer || "Keine Antwort eingegeben"}
+                  <b>{t("methods.yourAnswerColon")}</b>{" "}
+                  {answer.givenAnswer || t("methods.exam.noAnswer")}
                 </p>
                 <p>
-                  <b>Musterlösung:</b> {answer.expectedAnswer}
+                  <b>{t("methods.exam.modelAnswerColon")}</b> {answer.expectedAnswer}
                 </p>
               </li>
             ))}
@@ -704,7 +703,7 @@ export function ExamMode({
         </details>
 
         <p className="learning-save-confirmation">
-          Das Prüfungsergebnis wurde gespeichert.
+          {t("methods.exam.saved")}
         </p>
         <div className="learning-form-actions">
           <button
@@ -712,14 +711,14 @@ export function ExamMode({
             className="learning-secondary-button"
             onClick={returnToConfiguration}
           >
-            Neue Prüfung
+            {t("methods.exam.new")}
           </button>
           <button
             type="button"
             className="learning-primary-button"
             onClick={closeMode}
           >
-            Fertig
+            {t("methods.done")}
           </button>
         </div>
       </section>
@@ -732,11 +731,11 @@ export function ExamMode({
     <section className="learning-exam learning-exam--running" aria-labelledby={headingId}>
       <header className="learning-session-header">
         <div>
-          <p className="learning-eyebrow">Prüfungsmodus</p>
-          <h1 id={headingId}>Frage {currentIndex + 1} von {queue.length}</h1>
+          <p className="learning-eyebrow">{t("methods.exam.name")}</p>
+          <h1 id={headingId}>{t("methods.exam.position", { position: currentIndex + 1, total: queue.length })}</h1>
         </div>
         <div className="learning-exam-clock">
-          <span>Verbleibende Zeit</span>
+          <span>{t("methods.exam.timeRemaining")}</span>
           <time role="timer" aria-live="off">
             {formatTime(countdown.remainingSeconds)}
           </time>
@@ -747,7 +746,7 @@ export function ExamMode({
         className="learning-progress"
         value={progress}
         max="100"
-        aria-label={progress + " Prozent der Prüfung abgeschlossen"}
+        aria-label={t("methods.exam.progress", { count: progress })}
       />
 
       <article className="learning-question-card">
@@ -756,21 +755,21 @@ export function ExamMode({
       </article>
 
       <label className="learning-field">
-        <span>Deine Antwort</span>
+        <span>{t("methods.yourAnswer")}</span>
         <textarea
           ref={answerFieldRef}
           value={typedAnswer}
           onChange={(event) => changeTypedAnswer(event.target.value)}
           maxLength={MAX_TYPED_ANSWER_LENGTH}
           rows={7}
-          placeholder="Schreibe deine Antwort aus dem Gedächtnis auf …"
+          placeholder={t("methods.exam.placeholder")}
           readOnly={isRevealed}
           aria-describedby={answerHintId}
           autoFocus
           required
         />
         <small id={answerHintId}>
-          {typedAnswer.length} von {MAX_TYPED_ANSWER_LENGTH} Zeichen
+          {t("methods.characters", { count: typedAnswer.length, max: MAX_TYPED_ANSWER_LENGTH })}
         </small>
       </label>
 
@@ -781,29 +780,29 @@ export function ExamMode({
           onClick={() => setIsRevealed(true)}
           disabled={!typedAnswer.trim() || countdown.isFinished}
         >
-          Lösung aufdecken
+          {t("methods.exam.reveal")}
         </button>
       ) : (
         <>
           <article className="learning-answer learning-answer--own">
-            <span>Deine Antwort</span>
+            <span>{t("methods.yourAnswer")}</span>
             <p>{typedAnswer}</p>
           </article>
           <article className="learning-answer">
-            <span>Musterlösung</span>
+            <span>{t("methods.exam.modelAnswer")}</span>
             <p>{currentCard.back}</p>
           </article>
 
           <fieldset className="learning-ratings" ref={ratingsRef} tabIndex={-1}>
-            <legend>Wie bewertest du deine Antwort?</legend>
+            <legend>{t("methods.exam.ratePrompt")}</legend>
             <button
               type="button"
               className="learning-rating learning-rating--good"
               onClick={() => assessCurrentAnswer("correct")}
               disabled={countdown.isFinished}
             >
-              <strong>Richtig</strong>
-              <span>Die Kernaussage stimmt.</span>
+              <strong>{t("methods.exam.correct")}</strong>
+              <span>{t("methods.exam.correctHint")}</span>
             </button>
             <button
               type="button"
@@ -811,8 +810,8 @@ export function ExamMode({
               onClick={() => assessCurrentAnswer("partial")}
               disabled={countdown.isFinished}
             >
-              <strong>Teilweise richtig</strong>
-              <span>Ein wichtiger Teil fehlte.</span>
+              <strong>{t("methods.exam.partial")}</strong>
+              <span>{t("methods.exam.partialHint")}</span>
             </button>
             <button
               type="button"
@@ -820,8 +819,8 @@ export function ExamMode({
               onClick={() => assessCurrentAnswer("incorrect")}
               disabled={countdown.isFinished}
             >
-              <strong>Falsch</strong>
-              <span>Die Karte sollte bald wiederholt werden.</span>
+              <strong>{t("methods.exam.incorrect")}</strong>
+              <span>{t("methods.exam.incorrectHint")}</span>
             </button>
           </fieldset>
         </>
@@ -832,7 +831,7 @@ export function ExamMode({
         className="learning-close-button"
         onClick={closeMode}
       >
-        Prüfung abbrechen
+        {t("methods.exam.cancel")}
       </button>
     </section>
   );

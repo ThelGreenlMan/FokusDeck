@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Flashcard } from "../../types";
+import { formatNumber, t, useI18n } from "../../i18n";
 import { useSessionCountdown } from "../../hooks/useSessionCountdown";
 import type { ReviewRating } from "../../lib/learning/model";
 import type { VaultNote } from "../../lib/obsidian";
@@ -39,6 +40,7 @@ interface DeckSourceOption {
   key: string;
   type: "deck";
   deck: string;
+  isFallback: boolean;
 }
 
 interface NoteSourceOption {
@@ -57,19 +59,24 @@ function normalizedDeck(card: Flashcard) {
   return card.deck.trim() || "Ohne Stapel";
 }
 
-function buildSourceOptions(cards: Flashcard[], notes: VaultNote[]) {
+function buildSourceOptions(cards: Flashcard[], notes: VaultNote[], locale: string) {
   const decks = Array.from(new Set(cards.map(normalizedDeck))).sort((first, second) =>
-    first.localeCompare(second, "de-DE"),
+    first.localeCompare(second, locale),
   );
   const uniqueNotes = Array.from(
     new Map(notes.map((note) => [note.relativePath, note])).values(),
   ).sort((first, second) =>
-    first.relativePath.localeCompare(second.relativePath, "de-DE"),
+    first.relativePath.localeCompare(second.relativePath, locale),
   );
 
   return [
     ...decks.map(
-      (deck): DeckSourceOption => ({ key: `deck:${deck}`, type: "deck", deck }),
+      (deck): DeckSourceOption => ({
+        key: `deck:${deck}`,
+        type: "deck",
+        deck,
+        isFallback: deck === "Ohne Stapel" && !cards.some((card) => card.deck.trim() === deck),
+      }),
     ),
     ...uniqueNotes.map(
       (note): NoteSourceOption => ({
@@ -108,15 +115,16 @@ function persistedSource(source: SourceOption): FreeRecallSource {
 function formatCountdown(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  return `${formatNumber(minutes, { minimumIntegerDigits: 2, useGrouping: false })}:${formatNumber(seconds, { minimumIntegerDigits: 2, useGrouping: false })}`;
 }
 
 function countdownLabel(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return `${minutes} ${minutes === 1 ? "Minute" : "Minuten"} und ${seconds} ${
-    seconds === 1 ? "Sekunde" : "Sekunden"
-  } verbleibend`;
+  return t("methods.recall.countdown", {
+    minutes: t("methods.minutes", { count: minutes }),
+    seconds: t("methods.seconds", { count: seconds }),
+  });
 }
 
 export function FreeRecallMode({
@@ -127,15 +135,16 @@ export function FreeRecallMode({
   onRateCard,
   onClose,
 }: FreeRecallModeProps) {
+  const { t, locale } = useI18n();
   const headingId = useId();
   const recallHintId = useId();
   const ratingHintId = useId();
   const sourceOptions = useMemo(
-    () => buildSourceOptions(cards, notes),
-    [cards, notes],
+    () => buildSourceOptions(cards, notes, locale),
+    [cards, notes, locale],
   );
   const [sourceKey, setSourceKey] = useState(
-    () => buildSourceOptions(cards, notes)[0]?.key ?? "",
+    () => buildSourceOptions(cards, notes, locale)[0]?.key ?? "",
   );
   const [durationMinutes, setDurationMinutes] =
     useState<FreeRecallDuration>(5);
@@ -254,7 +263,7 @@ export function FreeRecallMode({
     if (
       hasUnsavedWork &&
       !window.confirm(
-        "Freies Erinnern beenden und ungespeicherten Text sowie Bewertungen verwerfen?",
+        t("methods.recall.confirmClose"),
       )
     ) {
       return;
@@ -267,23 +276,21 @@ export function FreeRecallMode({
     <section className="learning-mode" aria-labelledby={headingId}>
       <header className="learning-mode-header">
         <div className="learning-mode-heading">
-          <p className="learning-eyebrow">Freies Erinnern</p>
-          <h1 id={headingId}>Schreibe dein Wissen aus dem Kopf auf</h1>
+          <p className="learning-eyebrow">{t("methods.recall.name")}</p>
+          <h1 id={headingId}>{t("methods.recall.heading")}</h1>
           <p>
-            Während der Erinnerungsphase bleibt die Quelle verborgen. Danach
-            vergleichst und bewertest du dich selbst – FokusDeck bewertet deinen Text
-            nicht automatisch.
+            {t("methods.recall.intro")}
           </p>
         </div>
         <button type="button" className="learning-close-button" onClick={closeMode}>
-          Modus schließen
+          {t("methods.close")}
         </button>
       </header>
 
       {phase === "setup" && (
         <div className="learning-form">
           <label className="learning-field">
-            <span>Quelle zum Vergleichen</span>
+            <span>{t("methods.recall.source")}</span>
             <select
               value={sourceKey}
               onChange={(event) => setSourceKey(event.target.value)}
@@ -291,19 +298,19 @@ export function FreeRecallMode({
               autoFocus
             >
               {sourceOptions.length === 0 && (
-                <option value="">Keine Quelle verfügbar</option>
+                <option value="">{t("methods.recall.noSource")}</option>
               )}
               {deckSources.length > 0 && (
-                <optgroup label="Stapel">
+                <optgroup label={t("methods.decks")}>
                   {deckSources.map((source) => (
                     <option key={source.key} value={source.key}>
-                      {source.deck}
+                      {source.isFallback ? t("methods.noDeck") : source.deck}
                     </option>
                   ))}
                 </optgroup>
               )}
               {noteSources.length > 0 && (
-                <optgroup label="Obsidian-Notizen">
+                <optgroup label={t("methods.obsidianNotes")}>
                   {noteSources.map((source) => (
                     <option key={source.key} value={source.key}>
                       {source.note.relativePath}
@@ -315,7 +322,7 @@ export function FreeRecallMode({
           </label>
 
           <fieldset className="learning-fieldset">
-            <legend>Dauer</legend>
+            <legend>{t("methods.duration")}</legend>
             <div className="learning-choice-group">
               {DURATION_OPTIONS.map((minutes) => (
                 <label key={minutes} className="learning-choice">
@@ -326,7 +333,7 @@ export function FreeRecallMode({
                     checked={durationMinutes === minutes}
                     onChange={() => setDurationMinutes(minutes)}
                   />
-                  <span>{minutes} Minuten</span>
+                  <span>{t("methods.minutes", { count: minutes })}</span>
                 </label>
               ))}
             </div>
@@ -334,7 +341,7 @@ export function FreeRecallMode({
 
           {sourceOptions.length === 0 && (
             <p className="learning-feedback" role="status">
-              Erstelle zuerst Karteikarten oder verbinde einen Obsidian-Tresor.
+              {t("methods.recall.needSource")}
             </p>
           )}
 
@@ -345,7 +352,7 @@ export function FreeRecallMode({
               onClick={startRecall}
               disabled={!selectedSource}
             >
-              Erinnerungsphase starten
+              {t("methods.recall.start")}
             </button>
           </div>
         </div>
@@ -362,24 +369,23 @@ export function FreeRecallMode({
             >
               {formatCountdown(countdown.remainingSeconds)}
             </span>
-            <span>{countdown.isRunning ? "Erinnerungszeit läuft" : "Pausiert"}</span>
+            <span>{countdown.isRunning ? t("methods.recall.running") : t("methods.paused")}</span>
           </div>
 
           <label className="learning-field">
-            <span>Was weißt du noch?</span>
+            <span>{t("methods.recall.prompt")}</span>
             <textarea
               ref={recallFieldRef}
               value={recallText}
               onChange={(event) => setRecallText(event.target.value)}
               maxLength={MAX_RECALL_LENGTH}
               rows={15}
-              placeholder="Schreibe Begriffe, Zusammenhänge und Beispiele auf, an die du dich erinnerst."
+              placeholder={t("methods.recall.placeholder")}
               aria-describedby={recallHintId}
               readOnly={!countdown.isRunning}
             />
             <small id={recallHintId}>
-              Die Quelle wird erst nach dem Abschließen eingeblendet. {recallText.length}
-              /{MAX_RECALL_LENGTH} Zeichen
+              {t("methods.recall.characters", { count: recallText.length, max: MAX_RECALL_LENGTH })}
             </small>
           </label>
 
@@ -390,7 +396,7 @@ export function FreeRecallMode({
                 className="learning-secondary-button"
                 onClick={countdown.pause}
               >
-                Pausieren
+                {t("methods.pause")}
               </button>
             ) : (
               <button
@@ -398,7 +404,7 @@ export function FreeRecallMode({
                 className="learning-secondary-button"
                 onClick={countdown.start}
               >
-                Fortsetzen
+                {t("methods.resume")}
               </button>
             )}
             <button
@@ -406,7 +412,7 @@ export function FreeRecallMode({
               className="learning-primary-button"
               onClick={completeRecall}
             >
-              Erinnern abschließen
+              {t("methods.recall.finish")}
             </button>
           </div>
         </div>
@@ -415,44 +421,44 @@ export function FreeRecallMode({
       {phase === "compare" && sessionSource && (
         <div className="learning-comparison">
           <h3 ref={phaseHeadingRef} tabIndex={-1}>
-            Vergleiche deine Erinnerung mit der Quelle
+            {t("methods.recall.compare")}
           </h3>
 
           <section className="learning-reference-block">
-            <h4>Deine Notizen</h4>
+            <h4>{t("methods.recall.yourNotes")}</h4>
             <p className="learning-recall-text">
-              {recallText.trim() || "Du hast in dieser Runde nichts notiert."}
+              {recallText.trim() || t("methods.recall.emptyNotes")}
             </p>
           </section>
 
           {sessionSource.type === "obsidian" && (
             <section className="learning-reference-block">
-              <h4>Obsidian-Notiz · {sessionSource.note.relativePath}</h4>
+              <h4>{t("methods.recall.noteHeading", { path: sessionSource.note.relativePath })}</h4>
               <div className="learning-reference-text">
-                {sessionSource.note.content || "Diese Notiz enthält keinen Text."}
+                {sessionSource.note.content || t("methods.recall.emptySource")}
               </div>
             </section>
           )}
 
           {sessionSource.type === "deck" && sessionCards.length > 0 && (
             <p className="learning-feedback">
-              Vergleiche deine Notizen mit den Antworten aus dem Stapel
-              „{sessionSource.deck}“.
+              {t("methods.recall.compareDeck", {
+                deck: sessionSource.isFallback ? t("methods.noDeck") : sessionSource.deck,
+              })}
             </p>
           )}
 
           {sessionCards.length > 0 ? (
             <div className="learning-rating-list" aria-describedby={ratingHintId}>
               <p id={ratingHintId} className="learning-feedback">
-                Bewerte jeden Wissenspunkt. Deine Auswahl wird erst beim Speichern in
-                den Wiederholplan übernommen.
+                {t("methods.recall.ratingHint")}
               </p>
               {sessionCards.map((card) => (
                 <article key={card.id} className="learning-rating-card">
                   <p className="learning-rating-question">{card.front}</p>
                   <p className="learning-rating-answer">{card.back}</p>
                   <fieldset className="learning-rating-options">
-                    <legend>Wie gut hast du dich an diesen Punkt erinnert?</legend>
+                    <legend>{t("methods.recall.ratePrompt")}</legend>
                     <button
                       type="button"
                       className="learning-rating-again"
@@ -461,7 +467,7 @@ export function FreeRecallMode({
                         setRatings((current) => ({ ...current, [card.id]: "again" }))
                       }
                     >
-                      Nochmal
+                      {t("methods.rating.again")}
                     </button>
                     <button
                       type="button"
@@ -471,7 +477,7 @@ export function FreeRecallMode({
                         setRatings((current) => ({ ...current, [card.id]: "good" }))
                       }
                     >
-                      Gut
+                      {t("methods.rating.good")}
                     </button>
                   </fieldset>
                 </article>
@@ -479,16 +485,15 @@ export function FreeRecallMode({
             </div>
           ) : (
             <p className="learning-feedback" role="status">
-              Zu dieser Quelle gibt es keine direkt zugeordneten Karteikarten. Du
-              kannst das Ergebnis trotzdem speichern.
+              {t("methods.recall.noLinkedCards")}
             </p>
           )}
 
           <div className="learning-form-actions">
             <span className="learning-rating-progress" aria-live="polite">
               {sessionCards.length > 0
-                ? `${ratedCards} von ${sessionCards.length} Karten bewertet`
-                : "Keine Karten zu bewerten"}
+                ? t("methods.recall.rated", { count: ratedCards, total: sessionCards.length })
+                : t("methods.recall.noCardsToRate")}
             </span>
             <button
               type="button"
@@ -496,7 +501,7 @@ export function FreeRecallMode({
               onClick={saveResult}
               disabled={!ratingsComplete}
             >
-              Ergebnis speichern
+              {t("methods.saveResult")}
             </button>
           </div>
         </div>
@@ -505,14 +510,13 @@ export function FreeRecallMode({
       {phase === "saved" && (
         <div className="learning-completion" role="status">
           <h3 ref={phaseHeadingRef} tabIndex={-1}>
-            Freies Erinnern abgeschlossen
+            {t("methods.recall.complete")}
           </h3>
           <p>
-            Dein Ergebnis wurde lokal gespeichert und deine Kartenbewertungen wurden
-            in den Wiederholplan übernommen.
+            {t("methods.recall.saved")}
           </p>
           <button type="button" className="learning-primary-button" onClick={closeMode}>
-            Fertig
+            {t("methods.done")}
           </button>
         </div>
       )}

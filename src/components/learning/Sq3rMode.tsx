@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { VaultNote } from "../../lib/obsidian";
+import { formatNumber, useI18n } from "../../i18n";
+import { renderMethodMessage, type MethodMessage } from "./methodMessages";
 
 const MAX_SOURCE_LENGTH = 40_000;
 const MAX_OVERVIEW_LENGTH = 4_000;
@@ -13,11 +15,11 @@ const MAX_CARD_BACK_LENGTH = 4_000;
 const MAX_DECK_LENGTH = 100;
 
 const SQ3R_STEPS = [
-  { title: "Überblick", shortDescription: "Struktur und Kerngedanken erfassen" },
-  { title: "Fragen", shortDescription: "Eigene Leitfragen formulieren" },
-  { title: "Lesen", shortDescription: "Gezielt lesen und Notizen machen" },
-  { title: "Wiedergeben", shortDescription: "Ohne Vorlage aus dem Gedächtnis erklären" },
-  { title: "Wiederholen", shortDescription: "Vergleichen und Wissenslücken schließen" },
+  { title: "methods.sq3r.step.survey", shortDescription: "methods.sq3r.stepHint.survey" },
+  { title: "methods.sq3r.step.question", shortDescription: "methods.sq3r.stepHint.question" },
+  { title: "methods.sq3r.step.read", shortDescription: "methods.sq3r.stepHint.read" },
+  { title: "methods.sq3r.step.recite", shortDescription: "methods.sq3r.stepHint.recite" },
+  { title: "methods.sq3r.step.review", shortDescription: "methods.sq3r.stepHint.review" },
 ] as const;
 
 export interface Sq3rSource {
@@ -91,6 +93,7 @@ export function Sq3rMode({
   onConnectObsidian,
   onClose,
 }: Sq3rModeProps) {
+  const { t } = useI18n();
   const headingId = useId();
   const sourceLegendId = useId();
   const obsidianSourceId = useId();
@@ -130,7 +133,7 @@ export function Sq3rMode({
   const [currentStep, setCurrentStep] = useState(() =>
     stepNumber(savedDraft?.currentStep),
   );
-  const [feedback, setFeedback] = useState("");
+  const [feedback, setFeedback] = useState<MethodMessage | null>(null);
   const [completed, setCompleted] = useState(savedDraft?.completed === true);
   const [gapQuestion, setGapQuestion] = useState("");
   const [gapAnswer, setGapAnswer] = useState("");
@@ -156,6 +159,7 @@ export function Sq3rMode({
     return null;
   }, [effectiveNotePath, noteSnapshot, selectedNote]);
 
+  // Keep legacy system labels stable in saved entries; translate their display below.
   const activeSource: Sq3rSource =
     sourceType === "obsidian"
       ? activeObsidianSource ?? {
@@ -170,9 +174,13 @@ export function Sq3rMode({
           text: pastedText,
         };
 
+  const activeSourceLabel = sourceType === "text"
+    ? t("methods.sq3r.pastedText")
+    : activeSource.relativePath ? activeSource.label : t("methods.sq3r.noNoteSelected");
+
   const updateAnswer = (key: keyof Sq3rAnswers, value: string) => {
     setAnswers((current) => ({ ...current, [key]: value }));
-    setFeedback("");
+    setFeedback(null);
   };
 
   const createEntry = (completed: boolean): Sq3rEntry => ({
@@ -196,33 +204,32 @@ export function Sq3rMode({
   const validateSource = () => {
     if (activeSource.text.trim()) return true;
     setCurrentStep(0);
-    setFeedback(
-      sourceType === "obsidian"
-        ? "Wähle zuerst eine Obsidian-Notiz oder verwende einen eingefügten Text."
-        : "Füge zuerst den Text ein, mit dem du arbeiten möchtest.",
-    );
+    setFeedback({ key: sourceType === "obsidian"
+      ? "methods.sq3r.chooseSourceError"
+      : "methods.sq3r.pasteTextError",
+    });
     return false;
   };
 
   const saveDraft = () => {
     if (completed) return;
     onSave(createEntry(false));
-    setFeedback("Dein SQ3R-Zwischenstand wurde gespeichert.");
+    setFeedback({ key: "methods.sq3r.draftSaved" });
   };
 
   const goBack = () => {
     setCurrentStep((step) => Math.max(0, step - 1));
-    setFeedback("");
+    setFeedback(null);
   };
 
   const goForward = () => {
     if (!validateSource()) return;
     if (formRef.current?.reportValidity() === false) {
-      setFeedback("Bitte bearbeite den aktuellen Schritt, bevor du weitergehst.");
+      setFeedback({ key: "methods.sq3r.completeStepError" });
       return;
     }
     setCurrentStep((step) => Math.min(SQ3R_STEPS.length - 1, step + 1));
-    setFeedback("");
+    setFeedback(null);
   };
 
   const completeSq3r = (event: FormEvent<HTMLFormElement>) => {
@@ -240,14 +247,14 @@ export function Sq3rMode({
     if (missingStep >= 0) {
       setCurrentStep(missingStep);
       setFeedback(
-        `Bitte vervollständige zuerst den Schritt „${SQ3R_STEPS[missingStep].title}“.`,
+        { key: "methods.sq3r.missingStep", translatedParams: { step: SQ3R_STEPS[missingStep].title } },
       );
       return;
     }
 
     onSave({ ...createEntry(true), currentStep: SQ3R_STEPS.length - 1 });
     setCompleted(true);
-    setFeedback("SQ3R abgeschlossen und Lernfortschritt gespeichert.");
+    setFeedback({ key: "methods.sq3r.saved" });
   };
 
   const createGapCard = () => {
@@ -255,14 +262,14 @@ export function Sq3rMode({
     const back = gapAnswer.trim();
     const deck = cardDeck.trim() || deckFromSource(activeSource);
     if (!front || !back) {
-      setFeedback("Trage für die neue Karte eine Frage und eine Antwort ein.");
+      setFeedback({ key: "methods.sq3r.completeCardError" });
       return;
     }
 
     onCreateCard({ front, back, deck });
     setGapQuestion("");
     setGapAnswer("");
-    setFeedback(`Die Wissenslücke wurde als Karte im Stapel „${deck}“ erstellt.`);
+    setFeedback({ key: "methods.gapCardCreated", params: { deck } });
   };
 
   const selectNote = (relativePath: string) => {
@@ -279,7 +286,7 @@ export function Sq3rMode({
       setNoteSnapshot(source);
       setCardDeck(deckFromSource(source));
     }
-    setFeedback("");
+    setFeedback(null);
   };
 
   useEffect(() => {
@@ -297,19 +304,18 @@ export function Sq3rMode({
   if (completed) {
     return (
       <section className="learning-mode learning-completion" aria-labelledby={headingId}>
-        <p className="learning-eyebrow">SQ3R abgeschlossen</p>
-        <h1 id={headingId}>Text systematisch durchgearbeitet</h1>
+        <p className="learning-eyebrow">{t("methods.sq3r.complete")}</p>
+        <h1 id={headingId}>{t("methods.sq3r.completeHeading")}</h1>
         <p>
-          Dein Ergebnis wurde lokal gespeichert. Du kannst Wissenslücken jetzt in
-          deiner nächsten Tagesrunde wiederholen.
+          {t("methods.sq3r.completeHint")}
         </p>
         <dl className="learning-summary-grid">
-          <div><dt>Quelle</dt><dd className="learning-summary-text">{activeSource.label}</dd></div>
-          <div><dt>Schritte</dt><dd>5/5</dd></div>
+          <div><dt>{t("methods.source")}</dt><dd className="learning-summary-text">{activeSourceLabel}</dd></div>
+          <div><dt>{t("methods.sq3r.steps")}</dt><dd>{formatNumber(5)}/{formatNumber(5)}</dd></div>
         </dl>
         <div className="learning-form-actions">
           <button type="button" className="learning-primary-button" onClick={closeMode}>
-            Fertig
+            {t("methods.done")}
           </button>
         </div>
       </section>
@@ -320,19 +326,18 @@ export function Sq3rMode({
     <section className="learning-mode" aria-labelledby={headingId}>
       <header className="learning-mode-header">
         <div className="learning-mode-heading">
-          <p className="learning-eyebrow">SQ3R</p>
-          <h1 id={headingId}>Einen Text in fünf Schritten durcharbeiten</h1>
+          <p className="learning-eyebrow">{t("methods.sq3r.name")}</p>
+          <h1 id={headingId}>{t("methods.sq3r.heading")}</h1>
           <p>
-            FokusDeck liest ausgewählte Obsidian-Notizen ausschließlich. Deine
-            Notizen im Vault werden niemals verändert.
+            {t("methods.sq3r.intro")}
           </p>
         </div>
         <button type="button" className="learning-close-button" onClick={closeMode}>
-          Modus schließen
+          {t("methods.close")}
         </button>
       </header>
 
-      <ol className="learning-step-list" aria-label="SQ3R-Fortschritt">
+      <ol className="learning-step-list" aria-label={t("methods.sq3r.progress")}>
         {SQ3R_STEPS.map((step, index) => {
           const stateClass =
             index === currentStep
@@ -346,10 +351,10 @@ export function Sq3rMode({
               className={`learning-step ${stateClass}`}
               aria-current={index === currentStep ? "step" : undefined}
             >
-              <span className="learning-step-number">{index + 1}</span>
+              <span className="learning-step-number">{formatNumber(index + 1)}</span>
               <span className="learning-step-copy">
-                <strong>{step.title}</strong>
-                <small>{step.shortDescription}</small>
+                <strong>{t(step.title)}</strong>
+                <small>{t(step.shortDescription)}</small>
               </span>
             </li>
           );
@@ -360,13 +365,13 @@ export function Sq3rMode({
         {currentStep === 0 && (
           <div className="learning-step-panel">
             <div className="learning-step-heading">
-              <span>Schritt 1 von 5</span>
-              <h3 ref={stepHeadingRef} tabIndex={-1}>Überblick gewinnen</h3>
-              <p>Wähle deine Quelle und notiere zunächst Aufbau und Kerngedanken.</p>
+              <span>{t("methods.sq3r.stepPosition", { position: 1, total: 5 })}</span>
+              <h3 ref={stepHeadingRef} tabIndex={-1}>{t("methods.sq3r.surveyHeading")}</h3>
+              <p>{t("methods.sq3r.surveyHint")}</p>
             </div>
 
             <fieldset className="learning-source-picker" aria-describedby={sourceHintId}>
-              <legend id={sourceLegendId}>Quelle</legend>
+              <legend id={sourceLegendId}>{t("methods.source")}</legend>
               <label className="learning-radio-option" htmlFor={obsidianSourceId}>
                 <input
                   id={obsidianSourceId}
@@ -376,10 +381,10 @@ export function Sq3rMode({
                   onChange={() => {
                     setSourceType("obsidian");
                     setCardDeck(deckFromSource(activeObsidianSource ?? undefined));
-                    setFeedback("");
+                    setFeedback(null);
                   }}
                 />
-                Obsidian-Notiz verwenden
+                {t("methods.sq3r.useNote")}
               </label>
               <label className="learning-radio-option" htmlFor={textSourceId}>
                 <input
@@ -390,13 +395,13 @@ export function Sq3rMode({
                   onChange={() => {
                     setSourceType("text");
                     setCardDeck("SQ3R");
-                    setFeedback("");
+                    setFeedback(null);
                   }}
                 />
-                Eigenen Text einfügen
+                {t("methods.sq3r.useText")}
               </label>
               <small id={sourceHintId}>
-                Eingefügter Text steht immer als Alternative zur Verfügung.
+                {t("methods.sq3r.sourceHint")}
               </small>
             </fieldset>
 
@@ -404,7 +409,7 @@ export function Sq3rMode({
               <div className="learning-source-controls">
                 {notes.length || activeObsidianSource ? (
                   <label className="learning-field">
-                    <span>Obsidian-Notiz</span>
+                    <span>{t("methods.sq3r.note")}</span>
                     <select
                       value={effectiveNotePath}
                       onChange={(event) => selectNote(event.target.value)}
@@ -414,7 +419,7 @@ export function Sq3rMode({
                           (note) => note.relativePath === activeObsidianSource.relativePath,
                         ) && (
                           <option value={activeObsidianSource.relativePath}>
-                            {activeObsidianSource.label} (gespeicherter Stand)
+                            {t("methods.sq3r.savedSource", { label: activeObsidianSource.label })}
                           </option>
                         )}
                       {notes.map((note) => (
@@ -426,7 +431,7 @@ export function Sq3rMode({
                   </label>
                 ) : (
                   <p className="learning-empty-source">
-                    Es ist noch keine Obsidian-Notiz verfügbar.
+                    {t("methods.sq3r.noNotes")}
                   </p>
                 )}
                 <button
@@ -434,45 +439,45 @@ export function Sq3rMode({
                   className="learning-secondary-button"
                   onClick={onConnectObsidian}
                 >
-                  {notes.length ? "Anderen Vault verbinden" : "Obsidian verbinden"}
+                  {notes.length ? t("methods.sq3r.changeVault") : t("methods.sq3r.connect")}
                 </button>
                 <p className="learning-readonly-note">
-                  Nur Lesen: FokusDeck nimmt keine Änderungen an deinem Vault vor.
+                  {t("methods.sq3r.readOnly")}
                 </p>
               </div>
             ) : (
               <label className="learning-field">
-                <span>Text zum Bearbeiten</span>
+                <span>{t("methods.sq3r.text")}</span>
                 <textarea
                   value={pastedText}
                   onChange={(event) => {
                     setPastedText(event.target.value);
-                    setFeedback("");
+                    setFeedback(null);
                   }}
                   maxLength={MAX_SOURCE_LENGTH}
                   rows={10}
-                  placeholder="Füge hier deinen Lerntext ein."
+                  placeholder={t("methods.sq3r.textPlaceholder")}
                   required
                 />
-                <small>Maximal {MAX_SOURCE_LENGTH.toLocaleString("de-DE")} Zeichen.</small>
+                <small>{t("methods.sq3r.maxCharacters", { count: MAX_SOURCE_LENGTH })}</small>
               </label>
             )}
 
             {sourceType === "obsidian" && activeSource.text && (
-              <div className="learning-source-preview" aria-label="Vorschau der Obsidian-Notiz">
-                <strong>{activeSource.label}</strong>
+              <div className="learning-source-preview" aria-label={t("methods.sq3r.notePreview")}>
+                <strong>{activeSourceLabel}</strong>
                 <pre>{activeSource.text}</pre>
               </div>
             )}
 
             <label className="learning-field">
-              <span>Mein Überblick</span>
+              <span>{t("methods.sq3r.overview")}</span>
               <textarea
                 value={answers.overview}
                 onChange={(event) => updateAnswer("overview", event.target.value)}
                 maxLength={MAX_OVERVIEW_LENGTH}
                 rows={5}
-                placeholder="Welche Überschriften, Abschnitte und Kerngedanken erkennst du?"
+                placeholder={t("methods.sq3r.overviewPlaceholder")}
                 required
               />
             </label>
@@ -482,18 +487,18 @@ export function Sq3rMode({
         {currentStep === 1 && (
           <div className="learning-step-panel">
             <div className="learning-step-heading">
-              <span>Schritt 2 von 5</span>
-              <h3 ref={stepHeadingRef} tabIndex={-1}>Fragen formulieren</h3>
-              <p>Formuliere Fragen, die der Text nach dem Lesen beantworten soll.</p>
+              <span>{t("methods.sq3r.stepPosition", { position: 2, total: 5 })}</span>
+              <h3 ref={stepHeadingRef} tabIndex={-1}>{t("methods.sq3r.questionHeading")}</h3>
+              <p>{t("methods.sq3r.questionHint")}</p>
             </div>
             <label className="learning-field">
-              <span>Meine Leitfragen</span>
+              <span>{t("methods.sq3r.myQuestions")}</span>
               <textarea
                 value={answers.questions}
                 onChange={(event) => updateAnswer("questions", event.target.value)}
                 maxLength={MAX_QUESTIONS_LENGTH}
                 rows={9}
-                placeholder="Eine Frage pro Zeile, zum Beispiel: Warum ist dieser Vorgang wichtig?"
+                placeholder={t("methods.sq3r.questionsPlaceholder")}
                 autoFocus
                 required
               />
@@ -504,22 +509,22 @@ export function Sq3rMode({
         {currentStep === 2 && (
           <div className="learning-step-panel">
             <div className="learning-step-heading">
-              <span>Schritt 3 von 5</span>
-              <h3 ref={stepHeadingRef} tabIndex={-1}>Gezielt lesen</h3>
-              <p>Suche im Quelltext nach Antworten auf deine Leitfragen.</p>
+              <span>{t("methods.sq3r.stepPosition", { position: 3, total: 5 })}</span>
+              <h3 ref={stepHeadingRef} tabIndex={-1}>{t("methods.sq3r.readHeading")}</h3>
+              <p>{t("methods.sq3r.readHint")}</p>
             </div>
-            <div className="learning-source-preview" aria-label="Quelltext">
-              <strong>{activeSource.label}</strong>
+            <div className="learning-source-preview" aria-label={t("methods.sq3r.sourceText")}>
+              <strong>{activeSourceLabel}</strong>
               <pre>{activeSource.text}</pre>
             </div>
             <label className="learning-field">
-              <span>Notizen beim Lesen</span>
+              <span>{t("methods.sq3r.readingNotes")}</span>
               <textarea
                 value={answers.readingNotes}
                 onChange={(event) => updateAnswer("readingNotes", event.target.value)}
                 maxLength={MAX_READING_NOTES_LENGTH}
                 rows={7}
-                placeholder="Halte kurze Antworten und wichtige Zusammenhänge fest."
+                placeholder={t("methods.sq3r.readingPlaceholder")}
                 required
               />
             </label>
@@ -529,25 +534,24 @@ export function Sq3rMode({
         {currentStep === 3 && (
           <div className="learning-step-panel">
             <div className="learning-step-heading">
-              <span>Schritt 4 von 5</span>
-              <h3 ref={stepHeadingRef} tabIndex={-1}>Aus dem Gedächtnis wiedergeben</h3>
+              <span>{t("methods.sq3r.stepPosition", { position: 4, total: 5 })}</span>
+              <h3 ref={stepHeadingRef} tabIndex={-1}>{t("methods.sq3r.reciteHeading")}</h3>
               <p>
-                Der Quelltext ist jetzt verdeckt. Beantworte deine Fragen ohne
-                nachzusehen.
+                {t("methods.sq3r.reciteHint")}
               </p>
             </div>
             <div className="learning-question-reference">
-              <strong>Deine Leitfragen</strong>
+              <strong>{t("methods.sq3r.yourQuestions")}</strong>
               <p>{answers.questions}</p>
             </div>
             <label className="learning-field">
-              <span>Meine Wiedergabe</span>
+              <span>{t("methods.sq3r.recitation")}</span>
               <textarea
                 value={answers.recitation}
                 onChange={(event) => updateAnswer("recitation", event.target.value)}
                 maxLength={MAX_RECITATION_LENGTH}
                 rows={10}
-                placeholder="Schreibe die Antworten vollständig aus deinem Gedächtnis auf."
+                placeholder={t("methods.sq3r.recallPlaceholder")}
                 autoFocus
                 required
               />
@@ -558,74 +562,73 @@ export function Sq3rMode({
         {currentStep === 4 && (
           <div className="learning-step-panel">
             <div className="learning-step-heading">
-              <span>Schritt 5 von 5</span>
-              <h3 ref={stepHeadingRef} tabIndex={-1}>Vergleichen und wiederholen</h3>
+              <span>{t("methods.sq3r.stepPosition", { position: 5, total: 5 })}</span>
+              <h3 ref={stepHeadingRef} tabIndex={-1}>{t("methods.sq3r.reviewHeading")}</h3>
               <p>
-                Vergleiche deine Wiedergabe selbst mit dem Quelltext. FokusDeck
-                bewertet deine Formulierungen nicht automatisch.
+                {t("methods.sq3r.reviewHint")}
               </p>
             </div>
             <div className="learning-comparison">
-              <section className="learning-comparison-panel" aria-label="Eigene Wiedergabe">
-                <strong>Meine Wiedergabe</strong>
+              <section className="learning-comparison-panel" aria-label={t("methods.sq3r.yourRecall")}>
+                <strong>{t("methods.sq3r.recitation")}</strong>
                 <p>{answers.recitation}</p>
               </section>
-              <section className="learning-comparison-panel" aria-label="Quelltext">
-                <strong>{activeSource.label}</strong>
+              <section className="learning-comparison-panel" aria-label={t("methods.sq3r.sourceText")}>
+                <strong>{activeSourceLabel}</strong>
                 <pre>{activeSource.text}</pre>
               </section>
             </div>
             <label className="learning-field">
-              <span>Erkenntnisse und nächste Wiederholung</span>
+              <span>{t("methods.sq3r.review")}</span>
               <textarea
                 value={answers.review}
                 onChange={(event) => updateAnswer("review", event.target.value)}
                 maxLength={MAX_REVIEW_LENGTH}
                 rows={6}
-                placeholder="Was saß bereits gut? Was möchtest du noch einmal wiederholen?"
+                placeholder={t("methods.sq3r.reviewPlaceholder")}
                 required
               />
             </label>
 
             <fieldset className="learning-gap-card">
-              <legend>Optional: Wissenslücke als Karte speichern</legend>
+              <legend>{t("methods.sq3r.gapCard")}</legend>
               <label className="learning-field">
-                <span>Frage</span>
+                <span>{t("methods.question")}</span>
                 <textarea
                   value={gapQuestion}
                   onChange={(event) => {
                     setGapQuestion(event.target.value);
-                    setFeedback("");
+                    setFeedback(null);
                   }}
                   maxLength={MAX_CARD_FRONT_LENGTH}
                   rows={3}
-                  placeholder="Welche Frage möchtest du später wiederholen?"
+                  placeholder={t("methods.sq3r.gapQuestionPlaceholder")}
                 />
               </label>
               <label className="learning-field">
-                <span>Antwort</span>
+                <span>{t("methods.answer")}</span>
                 <textarea
                   value={gapAnswer}
                   onChange={(event) => {
                     setGapAnswer(event.target.value);
-                    setFeedback("");
+                    setFeedback(null);
                   }}
                   maxLength={MAX_CARD_BACK_LENGTH}
                   rows={4}
-                  placeholder="Trage die richtige, kurze Antwort ein."
+                  placeholder={t("methods.sq3r.gapAnswerPlaceholder")}
                 />
               </label>
               <label className="learning-field">
-                <span>Stapel</span>
+                <span>{t("methods.deck")}</span>
                 <input
                   type="text"
                   value={cardDeck}
                   onChange={(event) => {
                     setCardDeck(event.target.value);
-                    setFeedback("");
+                    setFeedback(null);
                   }}
                   maxLength={MAX_DECK_LENGTH}
-                  placeholder="SQ3R"
+                  placeholder={t("methods.sq3r.name")}
                 />
               </label>
               <button
@@ -633,7 +636,7 @@ export function Sq3rMode({
                 className="learning-secondary-button"
                 onClick={createGapCard}
               >
-                Karte erstellen
+                {t("methods.createCard")}
               </button>
             </fieldset>
           </div>
@@ -646,14 +649,14 @@ export function Sq3rMode({
             onClick={goBack}
             disabled={currentStep === 0}
           >
-            Zurück
+            {t("methods.back")}
           </button>
           <button
             type="button"
             className="learning-secondary-button"
             onClick={saveDraft}
           >
-            Zwischenstand speichern
+            {t("methods.sq3r.saveDraft")}
           </button>
           {currentStep < SQ3R_STEPS.length - 1 ? (
             <button
@@ -661,11 +664,11 @@ export function Sq3rMode({
               className="learning-primary-button"
               onClick={goForward}
             >
-              Weiter
+              {t("methods.next")}
             </button>
           ) : (
             <button type="submit" className="learning-primary-button">
-              SQ3R abschließen
+              {t("methods.sq3r.finish")}
             </button>
           )}
         </div>
@@ -676,7 +679,7 @@ export function Sq3rMode({
           role="status"
           aria-live="polite"
         >
-          {feedback}
+          {renderMethodMessage(feedback)}
         </p>
       </form>
     </section>

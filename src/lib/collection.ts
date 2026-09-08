@@ -1,4 +1,5 @@
 import type { Flashcard } from "../types";
+import { t } from "../i18n";
 import type { LearningProgress } from "./learning";
 import { normalizeLearningProgress } from "./learning";
 import { isTauriDesktop } from "./obsidian";
@@ -6,6 +7,19 @@ import { isTauriDesktop } from "./obsidian";
 const COLLECTION_FORMAT = "fokusdeck.collection";
 const COLLECTION_VERSION = 1;
 const MAX_COLLECTION_CARDS = 5_000;
+// These names are saved data, not translated UI labels.
+const DEFAULT_COLLECTION_NAME = "FokusDeck-Sammlung";
+
+/** Resolve validation messages on display so an open error follows a language change. */
+export function collectionError(
+  key: string,
+  params: Record<string, string | number> | (() => Record<string, string | number>) = {},
+) {
+  const message = () => t(key, typeof params === "function" ? params() : params);
+  const error = new Error(message());
+  Object.defineProperty(error, "message", { get: message, configurable: true });
+  return error;
+}
 
 interface CollectionCard {
   id: string;
@@ -38,15 +52,15 @@ function createId() {
 
 function requireString(
   value: unknown,
-  label: string,
+  label: () => string,
   maximumLength: number,
 ) {
   if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`${label} fehlt oder ist ungültig.`);
+    throw collectionError("study.collection.required", () => ({ label: label() }));
   }
   const normalized = value.trim();
   if (normalized.length > maximumLength) {
-    throw new Error(`${label} ist länger als ${maximumLength} Zeichen.`);
+    throw collectionError("study.collection.tooLong", () => ({ label: label(), limit: maximumLength }));
   }
   return normalized;
 }
@@ -66,16 +80,16 @@ function portableLearningField(source: object, fallbackDueAt: string) {
 
 export function createCollectionDocument(
   cards: Flashcard[],
-  name = "FokusDeck-Sammlung",
+  name = DEFAULT_COLLECTION_NAME,
 ): FokusDeckCollection {
   if (cards.length > MAX_COLLECTION_CARDS) {
-    throw new Error(`Eine Sammlung darf höchstens ${MAX_COLLECTION_CARDS} Karten enthalten.`);
+    throw collectionError("study.collection.tooMany", { count: MAX_COLLECTION_CARDS });
   }
 
   return {
     format: COLLECTION_FORMAT,
     version: COLLECTION_VERSION,
-    name: name.trim().slice(0, 100) || "FokusDeck-Sammlung",
+    name: name.trim().slice(0, 100) || DEFAULT_COLLECTION_NAME,
     exportedAt: new Date().toISOString(),
     cards: cards.map((card, index) => {
       const createdAt =
@@ -87,9 +101,9 @@ export function createCollectionDocument(
           typeof card.id === "string" && card.id.length <= 300
             ? card.id
             : `collection:${createId()}`,
-        front: requireString(card.front, `Frage von Karte ${index + 1}`, 1_000),
-        back: requireString(card.back, `Antwort von Karte ${index + 1}`, 4_000),
-        deck: requireString(card.deck, `Stapel von Karte ${index + 1}`, 100),
+        front: requireString(card.front, () => t("study.collection.cardFront", { count: index + 1 }), 1_000),
+        back: requireString(card.back, () => t("study.collection.cardBack", { count: index + 1 }), 4_000),
+        deck: requireString(card.deck, () => t("study.collection.cardDeck", { count: index + 1 }), 100),
         mastered: card.mastered,
         createdAt,
         ...portableLearningField(card, createdAt),
@@ -107,11 +121,11 @@ export function parseCollection(rawContent: string): FokusDeckCollection {
   try {
     value = JSON.parse(rawContent);
   } catch {
-    throw new Error("Die Datei enthält kein gültiges JSON.");
+    throw collectionError("study.collection.invalidJson");
   }
 
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Die Datei ist keine FokusDeck-Sammlung.");
+    throw collectionError("study.collection.invalidDocument");
   }
 
   const document = value as Record<string, unknown>;
@@ -119,18 +133,18 @@ export function parseCollection(rawContent: string): FokusDeckCollection {
     document.format !== COLLECTION_FORMAT ||
     document.version !== COLLECTION_VERSION
   ) {
-    throw new Error("Dieses Sammlungsformat wird nicht unterstützt.");
+    throw collectionError("study.collection.unsupportedFormat");
   }
   if (!Array.isArray(document.cards)) {
-    throw new Error("Die Sammlung enthält keine Kartenliste.");
+    throw collectionError("study.collection.missingCards");
   }
   if (document.cards.length > MAX_COLLECTION_CARDS) {
-    throw new Error(`Eine Sammlung darf höchstens ${MAX_COLLECTION_CARDS} Karten enthalten.`);
+    throw collectionError("study.collection.tooMany", { count: MAX_COLLECTION_CARDS });
   }
 
   const cards = document.cards.map((value, index): CollectionCard => {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new Error(`Karte ${index + 1} ist ungültig.`);
+      throw collectionError("study.collection.invalidCard", { count: index + 1 });
     }
     const card = value as Record<string, unknown>;
     const createdAt =
@@ -142,9 +156,9 @@ export function parseCollection(rawContent: string): FokusDeckCollection {
         typeof card.id === "string" && card.id.length <= 300
           ? card.id
           : `collection:${createId()}`,
-      front: requireString(card.front, `Frage von Karte ${index + 1}`, 1_000),
-      back: requireString(card.back, `Antwort von Karte ${index + 1}`, 4_000),
-      deck: requireString(card.deck, `Stapel von Karte ${index + 1}`, 100),
+      front: requireString(card.front, () => t("study.collection.cardFront", { count: index + 1 }), 1_000),
+      back: requireString(card.back, () => t("study.collection.cardBack", { count: index + 1 }), 4_000),
+      deck: requireString(card.deck, () => t("study.collection.cardDeck", { count: index + 1 }), 100),
       mastered: card.mastered === true,
       createdAt,
       ...portableLearningField(card, createdAt),
@@ -231,18 +245,18 @@ function safeFileName(name: string) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 80);
-  return normalized || "FokusDeck-Sammlung";
+  return normalized || DEFAULT_COLLECTION_NAME;
 }
 
 export async function saveCollectionFile(cards: Flashcard[], name: string) {
   if (!isTauriDesktop()) {
-    throw new Error("Sammlungen können nur in der Desktop-App gespeichert werden.");
+    throw collectionError("study.collection.desktopSaveOnly");
   }
   const { save } = await import("@tauri-apps/plugin-dialog");
   const path = await save({
-    title: "FokusDeck-Sammlung speichern",
+    title: t("study.collection.saveTitle"),
     defaultPath: `${safeFileName(name)}.fokusdeck.json`,
-    filters: [{ name: "FokusDeck-Sammlung", extensions: ["json"] }],
+    filters: [{ name: t("study.collection.defaultName"), extensions: ["json"] }],
   });
   if (!path) return false;
   const collectionPath = path.toLocaleLowerCase("de-DE").endsWith(".fokusdeck.json")
@@ -259,14 +273,14 @@ export async function saveCollectionFile(cards: Flashcard[], name: string) {
 
 export async function loadCollectionFile() {
   if (!isTauriDesktop()) {
-    throw new Error("Sammlungen können nur in der Desktop-App geladen werden.");
+    throw collectionError("study.collection.desktopLoadOnly");
   }
   const { open } = await import("@tauri-apps/plugin-dialog");
   const path = await open({
-    title: "FokusDeck-Sammlung laden",
+    title: t("study.collection.loadTitle"),
     directory: false,
     multiple: false,
-    filters: [{ name: "FokusDeck-Sammlung", extensions: ["json"] }],
+    filters: [{ name: t("study.collection.defaultName"), extensions: ["json"] }],
   });
   if (typeof path !== "string") return null;
 
