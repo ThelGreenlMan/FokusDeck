@@ -1,4 +1,5 @@
 import type { DownloadEvent, Update } from "@tauri-apps/plugin-updater";
+import { t } from "../i18n";
 
 export interface AppUpdateInfo {
   currentVersion: string;
@@ -27,15 +28,18 @@ export function calculateUpdatePercent(downloadedBytes: number, totalBytes?: num
 
 export function formatUpdateError(error: unknown) {
   const rawMessage = error instanceof Error ? error.message : String(error || "");
+  if (rawMessage === "FOKUSDECK_UPDATER_DESKTOP_ONLY") return t("settings.update.desktopOnly");
+  if (rawMessage === "FOKUSDECK_UPDATER_NO_SELECTION") return t("settings.update.noSelection");
   if (/404|not found/i.test(rawMessage)) {
-    return "Die Updatequelle ist noch nicht veröffentlicht. Bitte versuche es später erneut.";
+    return t("settings.update.errorUnavailable");
   }
   if (/network|fetch|connect|dns|timed?\s*out|offline/i.test(rawMessage)) {
-    return "Die Updatequelle ist gerade nicht erreichbar. Bitte prüfe deine Internetverbindung.";
+    return t("settings.update.errorNetwork");
   }
+  if (/signature|signatur/i.test(rawMessage)) return t("settings.update.errorSignature");
   return rawMessage
-    ? `Die Aktualisierung ist fehlgeschlagen: ${rawMessage.slice(0, 220)}`
-    : "Die Aktualisierung ist fehlgeschlagen.";
+    ? t("settings.update.errorDetail", { detail: rawMessage.slice(0, 220) })
+    : t("settings.update.error");
 }
 
 export async function getCurrentAppVersion() {
@@ -46,7 +50,7 @@ export async function getCurrentAppVersion() {
 
 export async function checkForAppUpdate(): Promise<AppUpdateInfo | null> {
   if (!canUseAppUpdater()) {
-    throw new Error("Updates stehen nur in der installierten Desktop-App zur Verfügung.");
+    throw new Error("FOKUSDECK_UPDATER_DESKTOP_ONLY");
   }
 
   if (pendingUpdate) {
@@ -72,7 +76,7 @@ export async function installPendingAppUpdate(
 ) {
   const update = pendingUpdate;
   if (!update) {
-    throw new Error("Es wurde noch kein Update ausgewählt.");
+    throw new Error("FOKUSDECK_UPDATER_NO_SELECTION");
   }
 
   let downloadedBytes = 0;

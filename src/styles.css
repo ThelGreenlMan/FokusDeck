@@ -1351,6 +1351,14 @@ h2 {
   grid-row: span 2;
 }
 
+.settings-card--language {
+  grid-column: 1 / -1;
+}
+
+.settings-card--language .settings-fields {
+  max-width: 360px;
+}
+
 .settings-card__heading {
   display: flex;
   align-items: center;
@@ -1602,6 +1610,24 @@ button:disabled {
   color: var(--muted);
   font-size: 9px;
   font-weight: 500;
+}
+
+.settings-fields label:has(.settings-language-select) {
+  display: grid;
+  align-items: start;
+  justify-content: stretch;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-language-select {
+  width: 100%;
+  min-height: 38px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--forest);
+  background: #fff;
+  font: inherit;
 }
 
 .settings-number-input input {

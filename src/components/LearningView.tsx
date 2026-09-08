@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Flashcard } from "../types";
+import { formatNumber, useI18n } from "../i18n";
 import { usePersistentState } from "../hooks/usePersistentState";
 import {
   dueLearningCards,
@@ -12,6 +13,7 @@ import {
 import type { VaultNote } from "../lib/obsidian";
 import {
   CardStudySession,
+  displaySessionTitle,
   type AnswerMode,
   type DailySessionSnapshot,
 } from "./learning/CardStudySession";
@@ -315,6 +317,7 @@ export function LearningView({
   onOpenCards,
   onOpenSettings,
 }: LearningViewProps) {
+  const { t, language, locale } = useI18n();
   const [clock, setClock] = useState(() => Date.now());
   const [activeMode, setActiveMode] = useState<LearningMode | null>(null);
   const [storedPlan, setStoredPlan, planStorageError] = usePersistentState<LearningPlan | null>(
@@ -342,9 +345,9 @@ export function LearningView({
   const deckNames = useMemo(
     () =>
       Array.from(new Set(cards.map(normalizedDeck))).sort((first, second) =>
-        first.localeCompare(second, "de-DE"),
+        first.localeCompare(second, locale),
       ),
-    [cards],
+    [cards, language, locale],
   );
   const selectedDecks = Array.isArray(plan.selectedDecks)
     ? plan.selectedDecks.filter((deck) => deckNames.includes(deck))
@@ -417,7 +420,7 @@ export function LearningView({
   const replaceSession = (session: DailySessionSnapshot) => {
     if (
       hasSavedSession &&
-      !window.confirm("Die gespeicherte Lernrunde verwerfen und eine neue beginnen?")
+      !window.confirm(t("study.learning.replaceSession"))
     ) {
       return;
     }
@@ -471,6 +474,7 @@ export function LearningView({
       id: globalThis.crypto?.randomUUID?.() ?? `card-${Date.now()}`,
       front,
       back,
+      // Persist the same default used by manual cards and CSV imports.
       deck: draft.deck.trim().slice(0, 100) || "Allgemein",
       mastered: false,
       createdAt: new Date().toISOString(),
@@ -589,44 +593,42 @@ export function LearningView({
       {storageNotice}
       <header className="page-intro learning-intro">
         <div>
-          <p className="eyebrow">Heute lernen</p>
-          <h1>Dein Lernplan für heute</h1>
+          <p className="eyebrow">{t("study.learning.eyebrow")}</p>
+          <h1>{t("study.learning.title")}</h1>
           <p>
-            Fällige und schwierige Karten werden automatisch ausgewählt und bei
-            mehreren Themen sinnvoll gemischt.
+            {t("study.learning.description")}
           </p>
         </div>
       </header>
 
       <dl
         className="learning-today-stats"
-        aria-label={selectedDecks.length ? "Lernstand der gewählten Stapel" : "Heutiger Lernstand"}
+        aria-label={t(selectedDecks.length ? "study.learning.selectedStatsAria" : "study.learning.statsAria")}
       >
         <div>
-          <dt>Fällig</dt>
-          <dd>{summary.dueNow}</dd>
+          <dt>{t("study.learning.due")}</dt>
+          <dd>{formatNumber(summary.dueNow)}</dd>
         </div>
         <div>
-          <dt>Fehler</dt>
-          <dd>{selectedErrors.length}</dd>
+          <dt>{t("study.learning.errors")}</dt>
+          <dd>{formatNumber(selectedErrors.length)}</dd>
         </div>
         <div>
-          <dt>Neu</dt>
-          <dd>{summary.newCards}</dd>
+          <dt>{t("study.learning.new")}</dt>
+          <dd>{formatNumber(summary.newCards)}</dd>
         </div>
         <div>
-          <dt>Ca. Zeit</dt>
-          <dd>{estimatedMinutes} Min.</dd>
+          <dt>{t("study.learning.estimatedTime")}</dt>
+          <dd>{t("study.learning.minutes", { count: estimatedMinutes })}</dd>
         </div>
       </dl>
 
       {cards.length === 0 ? (
         <section className="learning-empty-state" aria-labelledby="learning-empty-heading">
-          <p className="learning-eyebrow">Erster Schritt</p>
-          <h2 id="learning-empty-heading">Noch keine Karteikarten vorhanden</h2>
+          <p className="learning-eyebrow">{t("study.learning.emptyEyebrow")}</p>
+          <h2 id="learning-empty-heading">{t("study.learning.emptyTitle")}</h2>
           <p>
-            Erstelle Karten, importiere eine CSV-Datei oder verbinde Obsidian. SQ3R
-            und die Feynman-Methode kannst du auch ohne Karten verwenden.
+            {t("study.learning.emptyDescription")}
           </p>
           <div className="learning-form-actions">
             <button
@@ -634,7 +636,7 @@ export function LearningView({
               className="learning-primary-button"
               onClick={onOpenCards}
             >
-              Karteikarten öffnen
+              {t("study.learning.openCards")}
             </button>
             {!hasObsidian && (
               <button
@@ -642,7 +644,7 @@ export function LearningView({
                 className="learning-secondary-button"
                 onClick={onOpenSettings}
               >
-                Obsidian verbinden
+                {t("study.learning.connectObsidian")}
               </button>
             )}
           </div>
@@ -650,34 +652,33 @@ export function LearningView({
       ) : (
         <section className="learning-daily-plan" aria-labelledby="daily-plan-heading">
           <div className="learning-daily-copy">
-            <p className="learning-eyebrow">Empfohlene Tagesrunde</p>
+            <p className="learning-eyebrow">{t("study.learning.recommended")}</p>
             <h2 id="daily-plan-heading">
               {dailyQueue.length
-                ? `${dailyQueue.length} Karten warten auf dich`
-                : "Für heute ist alles geschafft"}
+                ? t("study.learning.cardsWaiting", { count: dailyQueue.length })
+                : t("study.learning.allDone")}
             </h2>
             <p>
               {dailyQueue.length
-                ? `Verteiltes Wiederholen und aktives Abrufen planen deine Runde${shouldMix ? "; Karten aus mehreren Themen wechseln sich ab." : "."}`
+                ? t(shouldMix ? "study.learning.roundDescriptionMixed" : "study.learning.roundDescription")
                 : selectedDecks.length
-                  ? "In den gewählten Stapeln ist heute nichts fällig. Eine freiwillige Wiederholung aktualisiert deinen Lernplan."
-                  : "Wenn du noch etwas tun möchtest, starte eine freiwillige Wiederholung; sie aktualisiert deinen Lernplan."}
+                  ? t("study.learning.selectedAllDone")
+                  : t("study.learning.optionalReview")}
             </p>
           </div>
 
           {hasSavedSession && dailySession && (
-            <aside className="learning-resume" aria-label="Gespeicherte Lernrunde">
-              <strong>{dailySession.title} fortsetzen</strong>
+            <aside className="learning-resume" aria-label={t("study.learning.savedSessionAria")}>
+              <strong>{t("study.learning.continueTitle", { title: displaySessionTitle(dailySession.title) })}</strong>
               <span>
-                Karte {Math.min(dailySession.position + 1, validSavedQueueLength)} von{" "}
-                {validSavedQueueLength}
+                {t("study.cardPosition", { position: Math.min(dailySession.position + 1, validSavedQueueLength), total: validSavedQueueLength })}
               </span>
               <button
                 type="button"
                 className="learning-primary-button"
                 onClick={() => setActiveMode("cards")}
               >
-                Runde fortsetzen
+                {t("study.learning.resume")}
               </button>
             </aside>
           )}
@@ -689,7 +690,7 @@ export function LearningView({
                 className="learning-primary-button"
                 onClick={startDailyRound}
               >
-                {hasSavedSession ? "Neue Runde beginnen" : "Heutige Runde starten"}
+                {t(hasSavedSession ? "study.learning.startNew" : "study.learning.startToday")}
               </button>
             ) : (
               <button
@@ -697,7 +698,7 @@ export function LearningView({
                 className="learning-primary-button"
                 onClick={startFiveMinuteTraining}
               >
-                5-Minuten-Training starten
+                {t("study.learning.startFiveMinutes")}
               </button>
             )}
             <button
@@ -706,22 +707,22 @@ export function LearningView({
               onClick={startErrorRound}
               disabled={selectedErrors.length === 0}
             >
-              Fehlerkarten üben ({selectedErrors.length})
+              {t("study.learning.practiceErrors", { count: selectedErrors.length })}
             </button>
           </div>
 
           <details className="learning-plan-settings">
-            <summary>Lernplan anpassen</summary>
+            <summary>{t("study.learning.customize")}</summary>
             <div className="learning-plan-fields">
               <fieldset className="learning-fieldset">
-                <legend>Stapel</legend>
+                <legend>{t("study.decks")}</legend>
                 <label className="learning-choice">
                   <input
                     type="checkbox"
                     checked={selectedDecks.length === 0}
                     onChange={() => changePlan({ selectedDecks: [] })}
                   />
-                  <span>Alle Stapel</span>
+                  <span>{t("study.learning.allDecks")}</span>
                 </label>
                 {deckNames.map((deck) => (
                   <label key={deck} className="learning-choice">
@@ -730,13 +731,13 @@ export function LearningView({
                       checked={selectedDecks.includes(deck)}
                       onChange={() => toggleDeck(deck)}
                     />
-                    <span>{deck}</span>
+                    <span>{deck === "Ohne Stapel" && !cards.some((card) => card.deck.trim() === deck) ? t("study.learning.noDeck") : deck}</span>
                   </label>
                 ))}
               </fieldset>
 
               <label className="learning-field">
-                <span>Höchstens {maximumCards} Karten</span>
+                <span>{t("study.learning.maximumCards", { count: maximumCards })}</span>
                 <input
                   type="range"
                   min="5"
@@ -756,16 +757,16 @@ export function LearningView({
                   onChange={(event) => changePlan({ mixTopics: event.target.checked })}
                   disabled={selectedDeckCount < 2}
                 />
-                <span>Themen mischen</span>
+                <span>{t("study.learning.mixTopics")}</span>
               </label>
               {selectedDeckCount < 2 && (
                 <p className="learning-field-hint">
-                  Zum Mischen werden mindestens zwei Stapel benötigt.
+                  {t("study.learning.mixHint")}
                 </p>
               )}
 
               <fieldset className="learning-fieldset">
-                <legend>Antwortmodus</legend>
+                <legend>{t("study.learning.answerMode")}</legend>
                 <label className="learning-choice">
                   <input
                     type="radio"
@@ -773,7 +774,7 @@ export function LearningView({
                     checked={answerMode === "mental"}
                     onChange={() => changePlan({ answerMode: "mental" })}
                   />
-                  <span>Im Kopf beantworten</span>
+                  <span>{t("study.learning.mentalAnswer")}</span>
                 </label>
                 <label className="learning-choice">
                   <input
@@ -782,7 +783,7 @@ export function LearningView({
                     checked={answerMode === "typed"}
                     onChange={() => changePlan({ answerMode: "typed" })}
                   />
-                  <span>Antwort eintippen</span>
+                  <span>{t("study.learning.typedAnswer")}</span>
                 </label>
               </fieldset>
             </div>
@@ -792,15 +793,15 @@ export function LearningView({
 
       <section className="learning-methods" aria-labelledby="other-methods-heading">
         <div className="learning-section-heading">
-          <p className="learning-eyebrow">Gezielt üben</p>
-          <h2 id="other-methods-heading">Andere Lernart wählen</h2>
+          <p className="learning-eyebrow">{t("study.learning.methodsEyebrow")}</p>
+          <h2 id="other-methods-heading">{t("study.learning.methodsTitle")}</h2>
         </div>
         <ul className="learning-method-list">
           <li className="learning-method-row">
             <div>
-              <small>Prüfungsmodus</small>
-              <strong>Prüfung simulieren</strong>
-              <p>Beantworte ausgewählte Karten mit Zeitlimit und Ergebnisübersicht.</p>
+              <small>{t("study.learning.examLabel")}</small>
+              <strong>{t("study.learning.examTitle")}</strong>
+              <p>{t("study.learning.examDescription")}</p>
             </div>
             <button
               type="button"
@@ -808,28 +809,28 @@ export function LearningView({
               onClick={() => setActiveMode("exam")}
               disabled={cards.length === 0}
             >
-              Prüfung starten
+              {t("study.learning.startExam")}
             </button>
           </li>
           <li className="learning-method-row">
             <div>
-              <small>Feynman-Methode</small>
-              <strong>Thema einfach erklären</strong>
-              <p>Erkläre ein Thema ohne Fachsprache und notiere deine Wissenslücke.</p>
+              <small>{t("study.learning.feynmanLabel")}</small>
+              <strong>{t("study.learning.feynmanTitle")}</strong>
+              <p>{t("study.learning.feynmanDescription")}</p>
             </div>
             <button
               type="button"
               className="learning-secondary-button"
               onClick={() => setActiveMode("feynman")}
             >
-              Feynman-Methode starten
+              {t("study.learning.startFeynman")}
             </button>
           </li>
           <li className="learning-method-row">
             <div>
-              <small>Freies Erinnern</small>
-              <strong>Aus dem Kopf schreiben</strong>
-              <p>Notiere dein Wissen und vergleiche es anschließend mit der Quelle.</p>
+              <small>{t("study.learning.recallLabel")}</small>
+              <strong>{t("study.learning.recallTitle")}</strong>
+              <p>{t("study.learning.recallDescription")}</p>
             </div>
             <button
               type="button"
@@ -837,17 +838,17 @@ export function LearningView({
               onClick={() => setActiveMode("free-recall")}
               disabled={cards.length === 0 && notes.length === 0}
             >
-              Freies Erinnern starten
+              {t("study.learning.startRecall")}
             </button>
           </li>
           <li className="learning-method-row">
             <div>
-              <small>SQ3R{sq3rDraft ? " · Zwischenstand vorhanden" : ""}</small>
-              <strong>Text in fünf Schritten lernen</strong>
+              <small>{t(sq3rDraft ? "study.learning.sq3rSavedLabel" : "study.learning.sq3rLabel")}</small>
+              <strong>{t("study.learning.sq3rTitle")}</strong>
               <p>
                 {hasObsidian
-                  ? "Arbeite eine Obsidian-Notiz oder einen eingefügten Text systematisch durch."
-                  : "Füge einen Text ein oder verbinde Obsidian als zusätzliche Quelle."}
+                  ? t("study.learning.sq3rObsidianDescription")
+                  : t("study.learning.sq3rDescription")}
               </p>
             </div>
             <button
@@ -855,7 +856,7 @@ export function LearningView({
               className="learning-secondary-button"
               onClick={() => setActiveMode("sq3r")}
             >
-              {sq3rDraft ? "SQ3R fortsetzen" : "SQ3R starten"}
+              {t(sq3rDraft ? "study.learning.resumeSq3r" : "study.learning.startSq3r")}
             </button>
           </li>
         </ul>

@@ -26,9 +26,23 @@ FokusDeck ist eine derzeit für Windows veröffentlichte, lokale Desktop-App fü
 
 Die UI entsteht mit **TypeScript und React**. Das macht Zustände wie Timer, Kartenstapel und Lernfortschritt übersichtlich und gut testbar. **Tauri 2** stellt die native Desktop-Hülle bereit; der kleine Rust-Kern erlaubt ein echtes Always-on-top-Fenster und später native Benachrichtigungen oder globale Tastenkürzel. Im Vergleich zu einer reinen Browser-App kann das Overlay dadurch zuverlässig über anderen Programmen bleiben.
 
+## Sprache / Language (Entwicklungsstand)
+
+Unter **Einstellungen → Sprache / Language** lässt sich die Oberfläche sofort
+zwischen Deutsch und Englisch umstellen, ohne einen Neustart. Die Auswahl wird
+lokal gespeichert; Deutsch bleibt die Voreinstellung. Timer und Overlay,
+Lernmethoden, Import/Export, Obsidian und Updates verwenden die gewählte Sprache.
+Laufende Timer und Lernrunden bleiben erhalten. Eigene Karten, Stapelnamen, Ziele,
+Notizen und bereits gespeicherte Inhalte werden nicht automatisch übersetzt.
+
+**English:** Choose **Einstellungen → Sprache / Language → English** to switch the
+interface immediately. Your study content stays unchanged. To contribute another
+language, follow the [translation guide and complete template](translations/README.md).
+These additions are part of the development version, not the published 0.4.0 release.
+
 ## Voraussetzungen
 
-- Node.js 22 LTS oder neuer
+- Node.js 22.22.2+ oder 24.15+ (LTS; auch für die UI-Tests)
 - pnpm 11
 - Rust mit dem stabilen MSVC-Toolchain
 - Unter Windows: Microsoft C++ Build Tools und WebView2
@@ -67,6 +81,7 @@ Parser-Tests und Frontend-Build prüfen:
 
 ```powershell
 pnpm test
+pnpm check:translations
 pnpm build
 ```
 
@@ -150,6 +165,8 @@ src/                     React-/TypeScript-Oberfläche
   components/            Timer, Dashboard, Karteikarten und Lernmodi
   hooks/                 Timerlogik und lokale Speicherung
   lib/                   Lernplanung, Parser und native Anbindung
+  i18n/locales/          Lokal gebündelte Übersetzungen und Sprachmetadaten
+translations/            Anleitung und vollständige Übersetzungsvorlage
 src-tauri/               Native Tauri-/Rust-Hülle
   capabilities/          Eng begrenzte Fensterberechtigungen
   nsis/                  Angepasster Windows-Upgrade-Installer

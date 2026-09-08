@@ -7,6 +7,8 @@
     "dev": "vite --port 1420",
     "build": "tsc --noEmit && vite build",
     "check:release-policy": "node scripts/release-policy.mjs dependencies x86_64-pc-windows-msvc",
+    "check:translations": "node scripts/translations.mjs check",
+    "translations:template": "node scripts/translations.mjs template",
     "test": "vitest run",
     "preview": "vite preview",
     "tauri": "tauri"
@@ -25,6 +27,7 @@
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^5.0.2",
+    "jsdom": "^30.0.1",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
