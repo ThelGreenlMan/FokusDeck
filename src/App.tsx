@@ -540,13 +540,13 @@ function App() {
             onOpenSettings={() => setActiveView("settings")}
           />
         </div>
-        {activeView === "cards" && (
+        <div hidden={activeView !== "cards"}>
           <FlashcardsView
             cards={cards}
             onCardsChange={setCards}
             onOpenObsidianSource={(source) => void showObsidianSource(source)}
           />
-        )}
+        </div>
         {activeView === "settings" && (
           <SettingsView
             timerSettings={settings}

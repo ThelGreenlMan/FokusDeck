@@ -23,6 +23,11 @@ function switchInSettings(language: string) {
   const select = container.querySelector<HTMLSelectElement>(".settings-language-select")!;
   act(() => { select.value = language; select.dispatchEvent(new Event("change", { bubbles: true })); });
 }
+function typeValue(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(element, value);
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+}
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -53,6 +58,54 @@ afterEach(async () => {
 });
 
 describe("whole-app language switch", () => {
+  it("retains the card form, selected deck and revealed answer when switching through Settings", () => {
+    nav(2);
+    const cardsPage = container.querySelector<HTMLElement>(".flashcards-page")!;
+    const cardsWrapper = cardsPage.parentElement!;
+    const selectedDeck = cardsPage.querySelectorAll<HTMLButtonElement>(".deck-list button")[1];
+    act(() => selectedDeck.click());
+    const card = cardsPage.querySelector<HTMLButtonElement>(".flashcard")!;
+    act(() => card.click());
+    click(cardsPage, ".collection-actions .primary-button");
+    const form = cardsPage.querySelector<HTMLFormElement>(".new-card-form")!;
+    const [front, back] = Array.from(form.querySelectorAll<HTMLTextAreaElement>("textarea"));
+    const deck = form.querySelector<HTMLInputElement>("input")!;
+    act(() => {
+      typeValue(front, "Meine noch ungespeicherte Frage");
+      typeValue(back, "Meine noch ungespeicherte Antwort");
+      typeValue(deck, "Mein eigener Stapel");
+    });
+    const storedBeforeSwitch = snapshotStudyData();
+    const writes = vi.spyOn(Storage.prototype, "setItem");
+
+    nav(3);
+    expect(cardsWrapper.hidden).toBe(true);
+    expect(container.querySelector(".new-card-form")).toBe(form);
+    switchInSettings("en");
+    expect(container.querySelector(".settings-page h1")?.textContent).toBe("Settings");
+    nav(2);
+
+    expect(cardsWrapper.hidden).toBe(false);
+    expect(container.querySelector(".flashcards-page")).toBe(cardsPage);
+    expect(cardsPage.querySelector("h1")?.textContent).toBe("Your flashcards");
+    expect(cardsPage.querySelector(".new-card-form")).toBe(form);
+    expect(form.querySelectorAll("textarea")[0]).toBe(front);
+    expect(form.querySelectorAll("textarea")[1]).toBe(back);
+    expect(form.querySelector("input")).toBe(deck);
+    expect(front.value).toBe("Meine noch ungespeicherte Frage");
+    expect(back.value).toBe("Meine noch ungespeicherte Antwort");
+    expect(deck.value).toBe("Mein eigener Stapel");
+    expect(front.placeholder).toBe("e.g. What is photosynthesis?");
+    expect(cardsPage.querySelector(".deck-list .is-active")).toBe(selectedDeck);
+    expect(selectedDeck.querySelector("span")?.textContent).toBe("Meine Prüfung");
+    expect(cardsPage.querySelector(".deck-list button span")?.textContent).toBe("All cards");
+    expect(cardsPage.querySelector(".flashcard")).toBe(card);
+    expect(card.classList.contains("is-flipped")).toBe(true);
+    expect(card.getAttribute("aria-label")).toBe("Answer: Meine Antwort. Click to show the question.");
+    expect(writes.mock.calls.map(([key]) => key)).toEqual([LANGUAGE_STORAGE_KEY]);
+    expect(snapshotStudyData()).toEqual(storedBeforeSwitch);
+  });
+
   it("retains a running timer and goal through Settings and the compact overlay", async () => {
     nav(1);
     click(container, ".primary-timer-button");
