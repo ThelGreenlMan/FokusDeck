@@ -79,6 +79,7 @@ jobs:
 
           "version=$packageVersion" >> $env:GITHUB_OUTPUT
           "tag=$tagName" >> $env:GITHUB_OUTPUT
+      - run: pnpm check:translations
       - run: pnpm test
       - run: pnpm build
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
