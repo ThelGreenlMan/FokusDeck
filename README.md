@@ -2,7 +2,7 @@
 
 FokusDeck ist eine derzeit für Windows veröffentlichte, lokale Desktop-App für konzentriertes Lernen. Sie kombiniert einen frei konfigurierbaren Lern- und Pausentimer mit digitalen Karteikarten und einer kompakten Always-on-top-Ansicht.
 
-## Funktionen in Version 0.4.0
+## Funktionen in Version 0.5.0
 
 - Lern- und Pausendauer frei einstellen
 - Ein konkretes Lernziel je Fokusphase festlegen und im Overlay anzeigen
@@ -21,12 +21,15 @@ FokusDeck ist eine derzeit für Windows veröffentlichte, lokale Desktop-App fü
 - Schreibgeschützte Obsidian-Anbindung mit automatischer Synchronisierung
 - Obsidian-Karten direkt aus FokusDeck in der Ursprungsnotiz öffnen
 - Responsive Oberfläche und verständliche Tastatur-Fokuszustände
+- Deutsch/Englisch sofort umschalten, einschließlich Timer, Overlay und Lernmethoden
+- Vollständige Vorlage und automatische Prüfungen für weitere Übersetzungen
+- Offene Kartenentwürfe beim Wechsel zwischen Kartenansicht und Einstellungen erhalten
 
 ## Warum diese Technik?
 
 Die UI entsteht mit **TypeScript und React**. Das macht Zustände wie Timer, Kartenstapel und Lernfortschritt übersichtlich und gut testbar. **Tauri 2** stellt die native Desktop-Hülle bereit; der kleine Rust-Kern erlaubt ein echtes Always-on-top-Fenster und später native Benachrichtigungen oder globale Tastenkürzel. Im Vergleich zu einer reinen Browser-App kann das Overlay dadurch zuverlässig über anderen Programmen bleiben.
 
-## Sprache / Language (Entwicklungsstand)
+## Sprache / Language
 
 Unter **Einstellungen → Sprache / Language** lässt sich die Oberfläche sofort
 zwischen Deutsch und Englisch umstellen, ohne einen Neustart. Die Auswahl wird
@@ -38,7 +41,7 @@ Notizen und bereits gespeicherte Inhalte werden nicht automatisch übersetzt.
 **English:** Choose **Einstellungen → Sprache / Language → English** to switch the
 interface immediately. Your study content stays unchanged. To contribute another
 language, follow the [translation guide and complete template](translations/README.md).
-These additions are part of the development version, not the published 0.4.0 release.
+Available from version 0.5.0. Existing study content is not automatically translated.
 
 ## Voraussetzungen
 
