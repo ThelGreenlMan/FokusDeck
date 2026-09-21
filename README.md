@@ -2,7 +2,7 @@
 
 FokusDeck ist eine derzeit für Windows veröffentlichte, lokale Desktop-App für konzentriertes Lernen. Sie kombiniert einen frei konfigurierbaren Lern- und Pausentimer mit digitalen Karteikarten und einer kompakten Always-on-top-Ansicht.
 
-## Funktionen in Version 0.5.0
+## Funktionen in Version 0.5.1
 
 - Lern- und Pausendauer frei einstellen
 - Ein konkretes Lernziel je Fokusphase festlegen und im Overlay anzeigen
@@ -24,6 +24,7 @@ FokusDeck ist eine derzeit für Windows veröffentlichte, lokale Desktop-App fü
 - Deutsch/Englisch sofort umschalten, einschließlich Timer, Overlay und Lernmethoden
 - Vollständige Vorlage und automatische Prüfungen für weitere Übersetzungen
 - Offene Kartenentwürfe beim Wechsel zwischen Kartenansicht und Einstellungen erhalten
+- Schutz vor Überschreiben bei Speicherfehlern mit lokalen Sicherungs- und Wiederherstellungsoptionen
 
 ## Warum diese Technik?
 
@@ -151,7 +152,7 @@ Gespeicherte Dateien enden auf `.fokusdeck.json` und enthalten Fragen, Antworten
 
 ## Schutz bei Speicherfehlern
 
-Dieser Schutz ist in PR #19 vorbereitet und noch nicht Teil der veröffentlichten Version 0.5.0.
+Dieser Schutz ist ab Version 0.5.1 enthalten. Ältere Versionen, einschließlich 0.5.0, enthalten ihn noch nicht.
 
 Kann FokusDeck gespeicherte Daten nicht lesen oder ihr Format nicht verarbeiten, wird das automatische Speichern für den betroffenen Bereich gesperrt. Die ursprünglichen Daten werden nicht mit Standardwerten überschrieben. Ein Hinweis bleibt in allen Ansichten sichtbar; im Overlay führt **Zur App** zu den Wiederherstellungsoptionen.
 
