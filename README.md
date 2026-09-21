@@ -80,7 +80,7 @@ Nur die Web-Oberfläche im Browser starten:
 pnpm dev
 ```
 
-Parser-Tests und Frontend-Build prüfen:
+Parser-, Speicher- und Oberflächentests sowie Frontend-Build prüfen:
 
 ```powershell
 pnpm test
@@ -148,6 +148,23 @@ Die erste Überschrift wird zur Frage, der übrige Text zur Antwort. Alternativ 
 In der Karteikartenansicht stehen **Sammlung laden** und **Sammlung speichern** zur Verfügung. Ist ein einzelner Stapel ausgewählt, wird nur dieser Stapel gespeichert; bei **Alle Karten** wird die gesamte Sammlung exportiert.
 
 Gespeicherte Dateien enden auf `.fokusdeck.json` und enthalten Fragen, Antworten, Stapel sowie den Lern- und Wiederholungsstand. Ältere FokusDeck-Sammlungen ohne Wiederholungsplan bleiben kompatibel. Lokale Obsidian-Pfade werden nicht exportiert. Beim Laden ergänzt FokusDeck nur neue Karten und überspringt inhaltliche Dubletten, ohne vorhandene Karten zu löschen.
+
+## Schutz bei Speicherfehlern
+
+Dieser Schutz ist in PR #19 vorbereitet und noch nicht Teil der veröffentlichten Version 0.5.0.
+
+Kann FokusDeck gespeicherte Daten nicht lesen oder ihr Format nicht verarbeiten, wird das automatische Speichern für den betroffenen Bereich gesperrt. Die ursprünglichen Daten werden nicht mit Standardwerten überschrieben. Ein Hinweis bleibt in allen Ansichten sichtbar; im Overlay führt **Zur App** zu den Wiederherstellungsoptionen.
+
+- **Erneut versuchen** lädt einen blockierten Bereich erneut. Nach einem vorübergehenden Speicherfehler versucht FokusDeck stattdessen, die noch offenen Änderungen zu speichern. Bei einer erkannten zwischenzeitlichen Änderung weist die App darauf hin, dass erneutes Laden die offenen Änderungen verwirft.
+- **Letzte Sicherung wiederherstellen** ist verfügbar, wenn eine lesbare lokale Sicherung existiert. Vor jedem normalen Überschreiben wird der vorherige gespeicherte Stand gesichert.
+- **Originaldaten exportieren** und bei Bedarf **Ungespeicherte Änderungen sichern** schreiben den jeweiligen unveränderten Inhalt in eine separate Reparaturdatei. Diese Dateien enden auf `.fokusdeck.json`, sind jedoch keine direkt importierbaren Kartensammlungen. Sie können persönliche Inhalte und lokale Obsidian-Pfade enthalten; teile sie nur bewusst.
+- **Mit Standardwerten neu beginnen** erfordert eine Bestätigung. Vor Wiederherstellung oder Zurücksetzen wird das ursprüngliche Original separat archiviert. Schlägt diese Sicherung fehl, wird das Original nicht ersetzt.
+
+Laufende Lernansichten und Kartenentwürfe bleiben bei einer Speicherblockierung geöffnet; ihre Bedienung wird gesperrt und Prüfungs-/Erinnerungstimer pausieren. Nach erfolgreicher Wiederholung lässt sich ohne Verlust der Eingaben weiterarbeiten. Mehrkartenbewertungen werden als vollständiger Kartenstand gespeichert oder gemeinsam als ungespeichert erhalten. Wiederherstellungshinweise sind auf Deutsch und Englisch verfügbar.
+
+Bei Schreibfehlern bleiben neue Änderungen nur in der geöffneten App erhalten, bis sie erfolgreich gespeichert oder exportiert wurden. Schließe die App in diesem Fall erst danach. Automatische Obsidian-Schreibvorgänge in den lokalen App-Speicher werden bei betroffenen Speicherfehlern pausiert; Obsidian-Dateien selbst werden weiterhin nur gelesen.
+
+Die Sicherung des vorherigen Stands und Reparaturarchive liegen im selben lokalen App-Speicher. Sie schützen nicht vor einem gelöschten App-Profil oder einem Geräteausfall. Sichere wichtige Karteikartensammlungen weiterhin regelmäßig über **Sammlung speichern** in eine unabhängige Datei. Dieser Sammlungsexport enthält keine Timer-Einstellungen oder Lernjournale.
 
 ## CSV-Import
 

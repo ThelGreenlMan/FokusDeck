@@ -32,7 +32,7 @@ export interface FreeRecallModeProps {
   notes: VaultNote[];
   isVisible: boolean;
   onSave: (entry: FreeRecallEntry) => void;
-  onRateCard: (cardId: string, rating: ReviewRating) => void;
+  onRateCards: (ratings: { cardId: string; rating: ReviewRating }[]) => void;
   onClose: () => void;
 }
 
@@ -132,7 +132,7 @@ export function FreeRecallMode({
   notes,
   isVisible,
   onSave,
-  onRateCard,
+  onRateCards,
   onClose,
 }: FreeRecallModeProps) {
   const { t, locale } = useI18n();
@@ -239,9 +239,7 @@ export function FreeRecallMode({
       cardId: card.id,
       rating: ratings[card.id],
     }));
-    for (const rating of completedRatings) {
-      onRateCard(rating.cardId, rating.rating);
-    }
+    onRateCards(completedRatings);
 
     onSave({
       id: createId(),

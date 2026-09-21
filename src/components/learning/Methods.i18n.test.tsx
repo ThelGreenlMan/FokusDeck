@@ -117,7 +117,7 @@ describe("learning methods live language changes", () => {
     const onSave = vi.fn();
     const onRateCard = vi.fn();
     const container = mount(<ExamMode cards={cards} isVisible onSave={onSave}
-      onRateCard={onRateCard} onClose={vi.fn()} />);
+      onRateCards={onRateCard} onClose={vi.fn()} />);
     click(container, "Prüfung starten");
     input(container.querySelector<HTMLTextAreaElement>("textarea")!, "Erste Antwort bleibt");
     click(container, "Lösung aufdecken");
@@ -206,7 +206,7 @@ describe("learning methods live language changes", () => {
   ])("localizes only the exam's empty-deck fallback ($label) and uses singular card counts", ({ deck, label }) => {
     const onSave = vi.fn();
     const container = mount(<ExamMode cards={[{ ...cards[0], deck }]} isVisible
-      onSave={onSave} onRateCard={vi.fn()} onClose={vi.fn()} />);
+      onSave={onSave} onRateCards={vi.fn()} onClose={vi.fn()} />);
     expect(container.textContent).toContain("1 Karte in der aktuellen Auswahl verfügbar");
     switchLanguage("en");
     expect(container.querySelector(".learning-check-option span")?.textContent).toBe(label);
@@ -226,7 +226,7 @@ describe("learning methods live language changes", () => {
   ])("localizes only free recall's empty-deck fallback ($label), never its saved source", ({ deck, label }) => {
     const onSave = vi.fn();
     const container = mount(<FreeRecallMode cards={[{ ...cards[0], deck }]} notes={[]} isVisible
-      onSave={onSave} onRateCard={vi.fn()} onClose={vi.fn()} />);
+      onSave={onSave} onRateCards={vi.fn()} onClose={vi.fn()} />);
     const select = container.querySelector("select")!;
     switchLanguage("en");
     expect(select.selectedOptions[0].textContent).toBe(label);
@@ -248,7 +248,7 @@ describe("learning methods live language changes", () => {
     const onSave = vi.fn();
     const note = { relativePath: "Wissen/Quelle.md", content: "Geheimer unveränderter Quelltext", modifiedAt: 10 };
     const container = mount(<FreeRecallMode cards={[]} notes={[note]} isVisible
-      onSave={onSave} onRateCard={vi.fn()} onClose={vi.fn()} />);
+      onSave={onSave} onRateCards={vi.fn()} onClose={vi.fn()} />);
     click(container, "Erinnerungsphase starten");
     const field = container.querySelector<HTMLTextAreaElement>("textarea")!;
     input(field, "Meine eigenen Erinnerungen");

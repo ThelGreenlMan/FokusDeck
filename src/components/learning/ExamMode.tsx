@@ -53,7 +53,7 @@ export interface ExamEntry {
 export interface ExamModeProps {
   cards: Flashcard[];
   isVisible: boolean;
-  onRateCard: (cardId: string, rating: ExamRating) => void;
+  onRateCards: (ratings: { cardId: string; rating: ExamRating }[]) => void;
   onSave: (entry: ExamEntry) => void;
   onClose: () => void;
 }
@@ -100,7 +100,7 @@ function ratingFor(judgement: Exclude<ExamJudgement, "unanswered">): ExamRating 
 export function ExamMode({
   cards,
   isVisible,
-  onRateCard,
+  onRateCards,
   onSave,
   onClose,
 }: ExamModeProps) {
@@ -175,16 +175,6 @@ export function ExamMode({
     );
   }, [maximumCardCount]);
 
-  const rateOnce = useCallback(
-    (cardId: string, rating: ExamRating) => {
-      if (ratedCardIdsRef.current.has(cardId)) return false;
-      ratedCardIdsRef.current.add(cardId);
-      onRateCard(cardId, rating);
-      return true;
-    },
-    [onRateCard],
-  );
-
   const finishExam = useCallback(
     (finalAnswers: ExamAnswerEntry[], timedOut: boolean) => {
       if (finalizedRef.current) return;
@@ -193,14 +183,14 @@ export function ExamMode({
 
       const completedAt = new Date().toISOString();
       const activeConfiguration = configurationRef.current;
-      for (const answer of finalAnswers) {
-        rateOnce(
-          answer.cardId,
-          answer.judgement === "unanswered"
-            ? "again"
-            : ratingFor(answer.judgement),
-        );
-      }
+      const ratings = finalAnswers
+        .filter((answer) => !ratedCardIdsRef.current.has(answer.cardId))
+        .map((answer) => ({
+          cardId: answer.cardId,
+          rating: answer.judgement === "unanswered" ? "again" as const : ratingFor(answer.judgement),
+        }));
+      if (ratings.length) onRateCards(ratings);
+      ratings.forEach(({ cardId }) => ratedCardIdsRef.current.add(cardId));
       const score = scoreExam(
         finalAnswers.map((answer) => ({
           cardId: answer.cardId,
@@ -230,7 +220,7 @@ export function ExamMode({
         onSave(entry);
       }
     },
-    [countdown, onSave, rateOnce],
+    [countdown, onSave, onRateCards],
   );
 
   const finishAfterTimeout = useCallback(() => {

@@ -155,10 +155,10 @@ describe("whole-app language switch", () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Nicht gespeichertes Ziel");
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    expect(container.querySelector(".toast")?.textContent).toContain("Die lokale Speicherung ist voll");
+    expect(container.querySelector(".storage-recovery")?.textContent).toContain("Die Änderungen sind noch nicht gespeichert");
     nav(3);
     switchInSettings("en");
-    expect(container.querySelector(".toast")?.textContent).toContain("Local storage is full or unavailable");
+    expect(container.querySelector(".storage-recovery")?.textContent).toContain("Local storage is full or unavailable");
     expect(container.textContent).toContain("Your language preference could not be saved locally");
     nav(1);
     expect(container.querySelector<HTMLInputElement>(".focus-goal-field input")?.value).toBe("Nicht gespeichertes Ziel");

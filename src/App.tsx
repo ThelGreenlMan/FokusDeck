@@ -12,6 +12,7 @@ import {
   SettingsIcon,
 } from "./components/Icons";
 import { SettingsView } from "./components/SettingsView";
+import { StorageRecoveryNotice, type StorageIssue } from "./components/StorageRecoveryNotice";
 import { TimerCard } from "./components/TimerCard";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { useStudyTimer } from "./hooks/useStudyTimer";
@@ -88,10 +89,16 @@ function safeMinutes(value: unknown, fallback: number) {
 
 function safeTimerSettings(value: unknown): TimerSettings {
   const stored = asRecord(value);
+  if (!stored) throw new Error("Ungültige Timer-Einstellungen.");
   return {
     focusMinutes: safeMinutes(stored?.focusMinutes, initialSettings.focusMinutes),
     breakMinutes: safeMinutes(stored?.breakMinutes, initialSettings.breakMinutes),
   };
+}
+
+function safeTimerGoal(value: unknown) {
+  if (typeof value !== "string") throw new Error("Ungültiges Timerziel.");
+  return normalizeTimerGoal(value);
 }
 
 function safeObsidianSource(value: unknown): ObsidianSource | undefined {
@@ -116,11 +123,13 @@ function safeObsidianSource(value: unknown): ObsidianSource | undefined {
 }
 
 function safeCards(value: unknown): Flashcard[] {
-  if (!Array.isArray(value)) return normalizeLearningCards(createStarterCards(), new Date());
+  if (!Array.isArray(value) || value.length > 5_000) {
+    throw new Error("Die gespeicherten Karteikarten sind ungültig oder überschreiten das Kartenlimit.");
+  }
 
   const cards: Flashcard[] = [];
   const usedIds = new Set<string>();
-  for (const candidate of value.slice(0, 5_000)) {
+  for (const candidate of value) {
     const stored = asRecord(candidate);
     if (
       !stored ||
@@ -133,11 +142,11 @@ function safeCards(value: unknown): Flashcard[] {
       typeof stored.deck !== "string" ||
       !stored.deck.trim()
     ) {
-      continue;
+      throw new Error("Eine gespeicherte Karte ist unvollständig.");
     }
 
     const id = stored.id.trim().slice(0, 300);
-    if (usedIds.has(id)) continue;
+    if (usedIds.has(id)) throw new Error("Mehrere gespeicherte Karten haben dieselbe Kennung.");
     usedIds.add(id);
     const createdAt =
       typeof stored.createdAt === "string" &&
@@ -145,6 +154,12 @@ function safeCards(value: unknown): Flashcard[] {
         ? stored.createdAt
         : new Date().toISOString();
     const source = safeObsidianSource(stored.source);
+    if (stored.source !== undefined && !source) {
+      throw new Error("Die Quelle einer gespeicherten Karte ist ungültig.");
+    }
+    if (stored.learning !== undefined && !asRecord(stored.learning)) {
+      throw new Error("Der Lernfortschritt einer gespeicherten Karte ist ungültig.");
+    }
     cards.push({
       id,
       front: stored.front.trim().slice(0, 1_000),
@@ -163,6 +178,7 @@ function safeCards(value: unknown): Flashcard[] {
 }
 
 function safeObsidianConnection(value: unknown): ObsidianConnection | null {
+  if (value === null) return null;
   const stored = asRecord(value);
   if (
     !stored ||
@@ -170,7 +186,7 @@ function safeObsidianConnection(value: unknown): ObsidianConnection | null {
     typeof stored.vaultPath !== "string" ||
     !stored.vaultPath.trim()
   ) {
-    return null;
+    throw new Error("Die gespeicherte Obsidian-Verbindung ist ungültig.");
   }
   const count = (entry: unknown) =>
     typeof entry === "number" && Number.isFinite(entry)
@@ -192,12 +208,15 @@ interface SavedObsidianProgress {
 
 function safeObsidianProgress(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {} as Record<string, SavedObsidianProgress>;
+    throw new Error("Der gespeicherte Obsidian-Lernfortschritt ist ungültig.");
   }
   const result: Record<string, SavedObsidianProgress> = {};
-  for (const [id, candidate] of Object.entries(value).slice(-5_000)) {
-    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
+  for (const [id, candidate] of Object.entries(value)) {
+    if (!asRecord(candidate)) throw new Error("Ein gespeicherter Obsidian-Lernfortschritt ist ungültig.");
     const stored = candidate as Record<string, unknown>;
+    if (stored.learning !== undefined && !asRecord(stored.learning)) {
+      throw new Error("Ein gespeicherter Obsidian-Lernfortschritt ist ungültig.");
+    }
     result[id] = {
       mastered: stored.mastered === true,
       learning:
@@ -231,36 +250,52 @@ async function configureDesktopOverlay(enabled: boolean) {
 function App() {
   const { t, formatNumber } = useI18n();
   const [activeView, setActiveView] = useState<AppView>("learning");
-  const [settings, setSettings] = usePersistentState<TimerSettings>(
+  const [settings, setSettings, settingsStorageError, settingsRecovery] = usePersistentState<TimerSettings>(
     "fokusdeck:timer-settings",
     initialSettings,
     safeTimerSettings,
   );
-  const [focusGoal, setFocusGoal, focusGoalStorageError] =
+  const [focusGoal, setFocusGoal, focusGoalStorageError, focusGoalRecovery] =
     usePersistentState<string>(
       "fokusdeck:timer-goal-v1",
       "",
-      normalizeTimerGoal,
+      safeTimerGoal,
     );
-  const [cards, setCards, cardsStorageError] = usePersistentState<Flashcard[]>(
+  const [cards, setCards, cardsStorageError, cardsRecovery] = usePersistentState<Flashcard[]>(
     "fokusdeck:flashcards",
     createStarterCards(),
     safeCards,
   );
-  const [obsidianConnection, setObsidianConnection] =
+  const [obsidianConnection, setObsidianConnection, connectionStorageError, connectionRecovery] =
     usePersistentState<ObsidianConnection | null>(
       "fokusdeck:obsidian-connection",
       null,
       safeObsidianConnection,
     );
-  const [storedObsidianProgress, setStoredObsidianProgress] =
-    usePersistentState<Record<string, SavedObsidianProgress> | null>(
+  const [storedObsidianProgress, setStoredObsidianProgress, progressStorageError, progressRecovery] =
+    usePersistentState<Record<string, SavedObsidianProgress>>(
       "fokusdeck:obsidian-learning-progress-v1",
       {},
       safeObsidianProgress,
     );
   const obsidianProgressRef = useRef(safeObsidianProgress(storedObsidianProgress));
   obsidianProgressRef.current = safeObsidianProgress(storedObsidianProgress);
+  const obsidianStorageBlocked = Boolean(cardsStorageError || connectionStorageError || progressStorageError);
+  const obsidianRecoveryRef = useRef([cardsRecovery, connectionRecovery, progressRecovery]);
+  obsidianRecoveryRef.current = [cardsRecovery, connectionRecovery, progressRecovery];
+  const isObsidianStorageBlocked = useCallback(
+    () => obsidianRecoveryRef.current.some((recovery) => recovery.hasError()),
+    [],
+  );
+  const [learningStorageIssues, setLearningStorageIssues] = useState<StorageIssue[]>([]);
+  const storageIssues: StorageIssue[] = [
+    { id: "timer-settings", title: t("storage.timerSettings"), error: settingsStorageError, recovery: settingsRecovery },
+    { id: "timer-goal", title: t("storage.timerGoal"), error: focusGoalStorageError, recovery: focusGoalRecovery },
+    { id: "cards", title: t("storage.cards"), error: cardsStorageError, recovery: cardsRecovery },
+    { id: "connection", title: t("storage.connection"), error: connectionStorageError, recovery: connectionRecovery },
+    { id: "progress", title: t("storage.progress"), error: progressStorageError, recovery: progressRecovery },
+    ...learningStorageIssues,
+  ].filter((issue) => issue.error);
   const [overlayMode, setOverlayMode] = useState(false);
   const [vaultNotes, setVaultNotes] = useState<VaultNote[]>([]);
   const [appError, setAppError] = useState<{ key: string; error?: unknown } | null>(null);
@@ -302,25 +337,33 @@ function App() {
       vaultPath: string,
       options: { announce?: boolean; replaceVaultPath?: string } = {},
     ) => {
+      if (isObsidianStorageBlocked()) {
+        setSyncError("storage.obsidianBlocked");
+        return;
+      }
       setIsSyncing(true);
       setSyncError(null);
       if (options.announce !== false) setSyncMessage(null);
 
       try {
         const result = await scanObsidianVault(vaultPath);
-        setVaultNotes(result.notes);
+        if (isObsidianStorageBlocked()) return;
         const importedCards = cardsFromVaultScan(result).map((card) => {
           const saved = obsidianProgressRef.current[card.id];
           return saved ? { ...card, ...saved } : card;
         });
         setCards((currentCards) => {
+          if (isObsidianStorageBlocked()) return currentCards;
           const baseCards =
             options.replaceVaultPath && options.replaceVaultPath !== result.rootPath
               ? removeVaultCards(currentCards, options.replaceVaultPath)
               : currentCards;
           return mergeVaultCards(baseCards, importedCards, result.rootPath);
         });
+        if (isObsidianStorageBlocked()) return;
         setObsidianConnection(connectionFromScan(result, importedCards.length));
+        if (isObsidianStorageBlocked()) return;
+        setVaultNotes(result.notes);
         if (options.announce !== false) {
           setSyncMessage({ key: "app.synced", params: { count: importedCards.length, vault: result.vaultName } });
         }
@@ -330,12 +373,12 @@ function App() {
         setIsSyncing(false);
       }
     },
-    [setCards, setObsidianConnection],
+    [isObsidianStorageBlocked, setCards, setObsidianConnection],
   );
 
   useEffect(() => {
     const vaultPath = obsidianConnection?.vaultPath;
-    if (!vaultPath || !isDesktop) return;
+    if (!vaultPath || !isDesktop || obsidianStorageBlocked) return;
 
     void syncVault(vaultPath, { announce: false });
     const syncOnFocus = () => void syncVault(vaultPath, { announce: false });
@@ -345,9 +388,13 @@ function App() {
       window.clearInterval(interval);
       window.removeEventListener("focus", syncOnFocus);
     };
-  }, [isDesktop, obsidianConnection?.vaultPath, syncVault]);
+  }, [isDesktop, obsidianConnection?.vaultPath, obsidianStorageBlocked, syncVault]);
 
   const connectObsidianVault = async () => {
+    if (isObsidianStorageBlocked()) {
+      setSyncError("storage.obsidianBlocked");
+      return;
+    }
     setSyncError(null);
     try {
       const selectedPath = await chooseObsidianVault();
@@ -359,12 +406,18 @@ function App() {
   };
 
   const disconnectObsidianVault = () => {
+    if (isObsidianStorageBlocked()) {
+      setSyncError("storage.obsidianBlocked");
+      return;
+    }
     if (obsidianConnection) {
       setCards((currentCards) =>
         removeVaultCards(currentCards, obsidianConnection.vaultPath),
       );
+      if (isObsidianStorageBlocked()) return;
     }
     setObsidianConnection(null);
+    if (isObsidianStorageBlocked()) return;
     setVaultNotes([]);
     setSyncMessage({ key: "app.disconnected" });
     setSyncError(null);
@@ -390,20 +443,23 @@ function App() {
   };
 
   useEffect(() => {
+    if (cardsRecovery.blocked) return;
     setCards((currentCards) => normalizeLearningCards(currentCards, new Date()));
-  }, [setCards]);
+  }, [cardsRecovery.blocked, setCards]);
 
   useEffect(() => {
+    if (isObsidianStorageBlocked()) return;
     const sourcedCards = cards.filter((card) => card.source);
     if (!sourcedCards.length) return;
     setStoredObsidianProgress((current) => {
+      if (isObsidianStorageBlocked()) return current;
       const next = safeObsidianProgress(current);
       for (const card of sourcedCards) {
         next[card.id] = { mastered: card.mastered, learning: card.learning };
       }
-      return Object.fromEntries(Object.entries(next).slice(-5_000));
+      return next;
     });
-  }, [cards, setStoredObsidianProgress]);
+  }, [cards, isObsidianStorageBlocked, obsidianStorageBlocked, setStoredObsidianProgress]);
 
   return (
     <>
@@ -424,6 +480,12 @@ function App() {
               <CloseIcon />
             </button>
           </header>
+          {storageIssues.length > 0 && (
+            <div className="storage-recovery-compact" role="alert">
+              <span>{t("storage.overlayAttention")}</span>
+              <button type="button" onClick={() => void setOverlay(false)}>{t("storage.backToApp")}</button>
+            </div>
+          )}
           <TimerCard
             compact
             mode={timer.mode}
@@ -493,22 +555,27 @@ function App() {
             <PinIcon />
             {t("app.alwaysOnTop")}
           </button>
-          <p>
+          <p className={storageIssues.length ? "sidebar-storage-error" : undefined}>
             <span />
-            {t("app.savedLocally")}
+            {t(storageIssues.length ? "storage.attention" : "app.savedLocally")}
           </p>
         </div>
       </aside>
 
       <div className="app-main">
-        {(appError || cardsStorageError || focusGoalStorageError) && (
+        {appError && (
           <div className="toast" role="alert">
-            {appError ? t(appError.key, { error: localizeNativeError(appError.error) }) : cardsStorageError || focusGoalStorageError}
+            {t(appError.key, { error: localizeNativeError(appError.error) })}
             {appError && (
               <button type="button" aria-label={t("app.closeError")} onClick={() => setAppError(null)}>
                 <CloseIcon />
               </button>
             )}
+          </div>
+        )}
+        {storageIssues.length > 0 && (
+          <div className="storage-recovery-list" aria-label={t("storage.notices")}>
+            {storageIssues.map((issue) => <StorageRecoveryNotice key={issue.id ?? issue.title} {...issue} />)}
           </div>
         )}
 
@@ -535,27 +602,29 @@ function App() {
             notes={vaultNotes}
             hasObsidian={Boolean(obsidianConnection)}
             isVisible={activeView === "learning" && !overlayMode}
+            cardsStorageBlocked={cardsRecovery.blocked}
+            onStorageIssuesChange={setLearningStorageIssues}
             onCardsChange={setCards}
             onOpenCards={() => setActiveView("cards")}
             onOpenSettings={() => setActiveView("settings")}
           />
         </div>
-        <div hidden={activeView !== "cards"}>
+        <fieldset hidden={activeView !== "cards"} className="storage-protected-content" disabled={cardsRecovery.blocked}>
           <FlashcardsView
             cards={cards}
             onCardsChange={setCards}
             onOpenObsidianSource={(source) => void showObsidianSource(source)}
           />
-        </div>
+        </fieldset>
         {activeView === "settings" && (
           <SettingsView
             timerSettings={settings}
-            timerSettingsLocked={timer.phaseStarted}
+            timerSettingsLocked={timer.phaseStarted || settingsRecovery.blocked}
             connection={obsidianConnection}
             isDesktop={isDesktop}
             isSyncing={isSyncing}
             syncMessage={syncMessage ? t(syncMessage.key, syncMessage.params) : ""}
-            syncError={syncError ? t("app.syncFailed", { error: localizeNativeError(syncError) }) : ""}
+            syncError={syncError === "storage.obsidianBlocked" ? t("storage.obsidianBlocked") : syncError ? t("app.syncFailed", { error: localizeNativeError(syncError) }) : ""}
             onTimerSettingsChange={setSettings}
             onConnect={() => void connectObsidianVault()}
             onSync={() => {
