@@ -1,21 +1,23 @@
 import { useId, useState } from "react";
 import type { StorageRecovery } from "../hooks/usePersistentState";
 import { isTauriDesktop } from "../lib/obsidian";
+import { t, useI18n } from "../i18n";
 
 export interface StorageIssue {
+  id?: string;
   title: string;
   error: string;
   recovery: StorageRecovery;
 }
 
 async function exportData(title: string, data: string, pending: boolean) {
-  const fileName = `FokusDeck-${pending ? "Ungespeichert" : "Original"}-${title.replace(/[^a-z0-9äöüß-]/gi, "-")}-${Date.now()}.fokusdeck.json`;
+  const fileName = `FokusDeck-${t(pending ? "storage.pendingFile" : "storage.originalFile")}-${title.replace(/[^a-z0-9äöüß-]/gi, "-")}-${Date.now()}.fokusdeck.json`;
   if (isTauriDesktop()) {
     const { save } = await import("@tauri-apps/plugin-dialog");
     const path = await save({
-      title: pending ? "Ungespeicherte Änderungen sichern" : "Originaldaten zur Wiederherstellung sichern",
+      title: t(pending ? "storage.exportPending" : "storage.exportOriginalTitle"),
       defaultPath: fileName,
-      filters: [{ name: "FokusDeck-Originaldaten", extensions: ["json"] }],
+      filters: [{ name: t("storage.fileFilter"), extensions: ["json"] }],
     });
     if (!path) return false;
     const target = path.toLowerCase().endsWith(".fokusdeck.json")
@@ -37,9 +39,10 @@ async function exportData(title: string, data: string, pending: boolean) {
 }
 
 export function StorageRecoveryNotice({ title, error, recovery }: StorageIssue) {
+  const { t } = useI18n();
   const titleId = useId();
   const [confirmReset, setConfirmReset] = useState(false);
-  const [exportMessage, setExportMessage] = useState("");
+  const [exportMessage, setExportMessage] = useState<{ pending?: boolean; error?: string } | null>(null);
   const [exporting, setExporting] = useState(false);
   if (!error) return null;
 
@@ -47,13 +50,13 @@ export function StorageRecoveryNotice({ title, error, recovery }: StorageIssue) 
     const data = pending ? recovery.pendingData : recovery.originalData;
     if (data === null) return;
     setExporting(true);
-    setExportMessage("");
+    setExportMessage(null);
     try {
       if (await exportData(title, data, pending)) {
-        setExportMessage(`${pending ? "Ungespeicherte Änderungen" : "Originaldaten"} gesichert. Diese Datei dient der Reparatur und ist keine importierbare Kartensammlung.`);
+        setExportMessage({ pending });
       }
     } catch (exportError) {
-      setExportMessage(`Export fehlgeschlagen: ${exportError instanceof Error ? exportError.message : String(exportError)}`);
+      setExportMessage({ error: exportError instanceof Error ? exportError.message : String(exportError) });
     } finally {
       setExporting(false);
     }
@@ -64,40 +67,42 @@ export function StorageRecoveryNotice({ title, error, recovery }: StorageIssue) 
       <h2 id={titleId}>{title}</h2>
       <p role="alert">{error}</p>
       {recovery.blocked && (
-        <p>Dieser Bereich ist vorübergehend gesperrt. Bearbeite ihn nach der Wiederherstellung weiter.</p>
+        <p>{t("storage.blocked")}</p>
       )}
       {recovery.pendingData !== null && (
-        <p>Deine ungespeicherten Änderungen sind noch in dieser Sitzung vorhanden. Sichere sie vor dem erneuten Laden, Wiederherstellen oder Zurücksetzen.</p>
+        <p>{t("storage.pendingWarning")}</p>
       )}
       <div className="storage-recovery__actions">
-        <button type="button" onClick={recovery.retry}>Erneut versuchen</button>
+        <button type="button" onClick={recovery.retry}>{t("storage.retry")}</button>
         {recovery.blocked && recovery.canRestoreBackup && (
-          <button type="button" onClick={recovery.restoreBackup}>Letzte Sicherung wiederherstellen</button>
+          <button type="button" onClick={recovery.restoreBackup}>{t("storage.restore")}</button>
         )}
         {recovery.originalData !== null && (
           <button type="button" disabled={exporting} onClick={() => void saveData(false)}>
-            Originaldaten exportieren
+            {t("storage.exportOriginal")}
           </button>
         )}
         {recovery.pendingData !== null && (
           <button type="button" disabled={exporting} onClick={() => void saveData(true)}>
-            Ungespeicherte Änderungen sichern
+            {t("storage.exportPending")}
           </button>
         )}
         {recovery.blocked && recovery.canReset && !confirmReset && (
-          <button type="button" onClick={() => setConfirmReset(true)}>Mit Standardwerten neu beginnen …</button>
+          <button type="button" onClick={() => setConfirmReset(true)}>{t("storage.reset")}</button>
         )}
       </div>
       {recovery.blocked && recovery.canReset && confirmReset && (
         <div className="storage-recovery__confirmation">
-          <p>„{title}“ auf die Standardwerte zurücksetzen? Die bisherigen Originaldaten werden vorher separat gesichert.</p>
+          <p>{t("storage.confirmReset", { title })}</p>
           <div className="storage-recovery__actions">
-            <button type="button" onClick={() => { recovery.reset(); setConfirmReset(false); }}>Zurücksetzen bestätigen</button>
-            <button type="button" onClick={() => setConfirmReset(false)}>Abbrechen</button>
+            <button type="button" onClick={() => { recovery.reset(); setConfirmReset(false); }}>{t("storage.confirm")}</button>
+            <button type="button" onClick={() => setConfirmReset(false)}>{t("storage.cancel")}</button>
           </div>
         </div>
       )}
-      {exportMessage && <p role="status">{exportMessage}</p>}
+      {exportMessage && <p role="status">{exportMessage.error !== undefined
+        ? t("storage.exportFailed", { error: exportMessage.error })
+        : t("storage.exported", { data: t(exportMessage.pending ? "storage.pendingLabel" : "storage.originalLabel") })}</p>}
     </section>
   );
 }

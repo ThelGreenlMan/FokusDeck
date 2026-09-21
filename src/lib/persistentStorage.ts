@@ -11,9 +11,9 @@ export interface PersistentSnapshot<T> {
 }
 
 type StorageAccess = Pick<Storage, "getItem" | "setItem">;
-const readError = "Die gespeicherten Daten konnten nicht geladen werden. Automatisches Speichern ist für diesen Bereich gesperrt. Die Originaldaten bleiben erhalten.";
-const writeError = "Die Änderungen sind noch nicht gespeichert. Der lokale Speicher ist voll oder nicht verfügbar. Bitte erneut versuchen oder die Daten als Datei sichern, bevor du die App schließt.";
-const changedError = "Die gespeicherten Daten wurden inzwischen geändert. Bitte erneut laden. Noch nicht gespeicherte Änderungen in diesem Bereich werden dabei verworfen.";
+const readError = "storage.readError";
+const writeError = "storage.writeError";
+const changedError = "storage.changedError";
 let archiveSequence = 0;
 
 /** Owns one storage key. Construction and reads never modify stored data. */
@@ -93,7 +93,7 @@ export function createPersistentStore<T>(
       currentRaw = access().getItem(key);
     } catch {
       retryPendingRead = true;
-      block(null, false, "Die Änderungen sind noch nicht gespeichert, weil der Speicher nicht gelesen werden konnte. Bitte erneut versuchen. Deine Änderungen bleiben bis dahin in dieser geöffneten App erhalten.");
+      block(null, false, "storage.pendingReadError");
       return;
     }
     if (currentRaw !== knownRaw) {
@@ -168,7 +168,7 @@ export function createPersistentStore<T>(
     } catch {
       publish({
         ...snapshot,
-        error: "Die Wiederherstellung konnte nicht sicher gespeichert werden. Bitte prüfe den freien Speicher und versuche es erneut. Die Originaldaten wurden nicht ersetzt.",
+        error: "storage.recoveryError",
         canRestoreBackup: hasBackup(),
       });
     }

@@ -33,6 +33,8 @@ import {
   type LearningProgress,
 } from "./lib/learning";
 import { displayedTimerGoal, normalizeTimerGoal } from "./lib/timerGoal";
+import { t, useI18n, type MessageParams } from "./i18n";
+import { localizeNativeError } from "./lib/obsidian";
 import type {
   AppView,
   Flashcard,
@@ -46,28 +48,28 @@ const initialSettings: TimerSettings = {
   breakMinutes: 5,
 };
 
-const starterCards: Flashcard[] = [
+const createStarterCards = (): Flashcard[] => [
   {
     id: "starter-active-recall",
-    front: "Was bedeutet Active Recall?",
-    back: "Wissen aktiv aus dem Gedächtnis abrufen, statt es nur erneut zu lesen.",
-    deck: "Lernmethoden",
+    front: t("starter.recall.front"),
+    back: t("starter.recall.back"),
+    deck: t("starter.learningDeck"),
     mastered: false,
     createdAt: "2026-01-01T00:00:00.000Z",
   },
   {
     id: "starter-spacing",
-    front: "Warum sind verteilte Wiederholungen wirksam?",
-    back: "Sie greifen kurz vor dem Vergessen ein und stärken dadurch die Erinnerung langfristig.",
-    deck: "Lernmethoden",
+    front: t("starter.spacing.front"),
+    back: t("starter.spacing.back"),
+    deck: t("starter.learningDeck"),
     mastered: false,
     createdAt: "2026-01-01T00:00:00.000Z",
   },
   {
     id: "starter-pomodoro",
-    front: "Was ist das Ziel einer Fokusphase?",
-    back: "Eine klar definierte Aufgabe ohne Unterbrechung zu bearbeiten.",
-    deck: "Fokus",
+    front: t("starter.focus.front"),
+    back: t("starter.focus.back"),
+    deck: t("starter.focusDeck"),
     mastered: false,
     createdAt: "2026-01-01T00:00:00.000Z",
   },
@@ -246,6 +248,7 @@ async function configureDesktopOverlay(enabled: boolean) {
 }
 
 function App() {
+  const { t, formatNumber } = useI18n();
   const [activeView, setActiveView] = useState<AppView>("learning");
   const [settings, setSettings, settingsStorageError, settingsRecovery] = usePersistentState<TimerSettings>(
     "fokusdeck:timer-settings",
@@ -260,7 +263,7 @@ function App() {
     );
   const [cards, setCards, cardsStorageError, cardsRecovery] = usePersistentState<Flashcard[]>(
     "fokusdeck:flashcards",
-    starterCards,
+    createStarterCards(),
     safeCards,
   );
   const [obsidianConnection, setObsidianConnection, connectionStorageError, connectionRecovery] =
@@ -286,19 +289,19 @@ function App() {
   );
   const [learningStorageIssues, setLearningStorageIssues] = useState<StorageIssue[]>([]);
   const storageIssues: StorageIssue[] = [
-    { title: "Timer-Einstellungen", error: settingsStorageError, recovery: settingsRecovery },
-    { title: "Timerziel", error: focusGoalStorageError, recovery: focusGoalRecovery },
-    { title: "Karteikarten", error: cardsStorageError, recovery: cardsRecovery },
-    { title: "Obsidian-Verbindung", error: connectionStorageError, recovery: connectionRecovery },
-    { title: "Obsidian-Lernfortschritt", error: progressStorageError, recovery: progressRecovery },
+    { id: "timer-settings", title: t("storage.timerSettings"), error: settingsStorageError, recovery: settingsRecovery },
+    { id: "timer-goal", title: t("storage.timerGoal"), error: focusGoalStorageError, recovery: focusGoalRecovery },
+    { id: "cards", title: t("storage.cards"), error: cardsStorageError, recovery: cardsRecovery },
+    { id: "connection", title: t("storage.connection"), error: connectionStorageError, recovery: connectionRecovery },
+    { id: "progress", title: t("storage.progress"), error: progressStorageError, recovery: progressRecovery },
     ...learningStorageIssues,
   ].filter((issue) => issue.error);
   const [overlayMode, setOverlayMode] = useState(false);
   const [vaultNotes, setVaultNotes] = useState<VaultNote[]>([]);
-  const [appError, setAppError] = useState("");
+  const [appError, setAppError] = useState<{ key: string; error?: unknown } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState("");
-  const [syncError, setSyncError] = useState("");
+  const [syncMessage, setSyncMessage] = useState<{ key: string; params?: MessageParams } | null>(null);
+  const [syncError, setSyncError] = useState<unknown>(null);
   const timer = useStudyTimer(settings);
   const [activeFocusGoal, setActiveFocusGoal] = useState<string | null>(null);
   const { goal: displayedFocusGoal, locked: focusGoalLocked } =
@@ -335,12 +338,12 @@ function App() {
       options: { announce?: boolean; replaceVaultPath?: string } = {},
     ) => {
       if (isObsidianStorageBlocked()) {
-        setSyncError("Bitte stelle zuerst die gespeicherten Daten wieder her, bevor du Obsidian synchronisierst.");
+        setSyncError("storage.obsidianBlocked");
         return;
       }
       setIsSyncing(true);
-      setSyncError("");
-      if (options.announce !== false) setSyncMessage("");
+      setSyncError(null);
+      if (options.announce !== false) setSyncMessage(null);
 
       try {
         const result = await scanObsidianVault(vaultPath);
@@ -362,14 +365,10 @@ function App() {
         if (isObsidianStorageBlocked()) return;
         setVaultNotes(result.notes);
         if (options.announce !== false) {
-          setSyncMessage(
-            `${importedCards.length} ${importedCards.length === 1 ? "Karte" : "Karten"} aus ${result.vaultName} synchronisiert.`,
-          );
+          setSyncMessage({ key: "app.synced", params: { count: importedCards.length, vault: result.vaultName } });
         }
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error || "Unbekannter Fehler");
-        setSyncError(`Synchronisierung fehlgeschlagen: ${message}`);
+        setSyncError(error);
       } finally {
         setIsSyncing(false);
       }
@@ -393,20 +392,22 @@ function App() {
 
   const connectObsidianVault = async () => {
     if (isObsidianStorageBlocked()) {
-      setSyncError("Bitte stelle zuerst die gespeicherten Daten wieder her, bevor du Obsidian verbindest.");
+      setSyncError("storage.obsidianBlocked");
       return;
     }
-    setSyncError("");
-    const selectedPath = await chooseObsidianVault();
-    if (!selectedPath) return;
-    await syncVault(selectedPath, {
-      replaceVaultPath: obsidianConnection?.vaultPath,
-    });
+    setSyncError(null);
+    try {
+      const selectedPath = await chooseObsidianVault();
+      if (!selectedPath) return;
+      await syncVault(selectedPath, { replaceVaultPath: obsidianConnection?.vaultPath });
+    } catch (error) {
+      setSyncError(error);
+    }
   };
 
   const disconnectObsidianVault = () => {
     if (isObsidianStorageBlocked()) {
-      setSyncError("Bitte stelle zuerst die gespeicherten Daten wieder her, bevor du Obsidian trennst.");
+      setSyncError("storage.obsidianBlocked");
       return;
     }
     if (obsidianConnection) {
@@ -418,29 +419,26 @@ function App() {
     setObsidianConnection(null);
     if (isObsidianStorageBlocked()) return;
     setVaultNotes([]);
-    setSyncMessage("Obsidian-Verbindung getrennt.");
-    setSyncError("");
+    setSyncMessage({ key: "app.disconnected" });
+    setSyncError(null);
   };
 
   const showObsidianSource = async (source: ObsidianSource) => {
     try {
       await openObsidianSource(source);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setAppError(`Die Obsidian-Notiz konnte nicht geöffnet werden: ${message}`);
+      setAppError({ key: "app.openNoteFailed", error });
     }
   };
 
   const setOverlay = async (enabled: boolean) => {
-    setAppError("");
+    setAppError(null);
     setOverlayMode(enabled);
     try {
       await configureDesktopOverlay(enabled);
     } catch {
       setOverlayMode(false);
-      setAppError(
-        "Das native Overlay konnte nicht aktiviert werden. In der Browser-Vorschau steht nur die kompakte Ansicht zur Verfügung.",
-      );
+      setAppError({ key: "app.overlayFailed" });
     }
   };
 
@@ -471,21 +469,21 @@ function App() {
             <Brand compact />
             <div className="overlay-shell__status">
               <PinIcon />
-              Immer im Vordergrund
+              {t("app.overlayStatus")}
             </div>
             <button
               type="button"
               className="overlay-close"
               onClick={() => void setOverlay(false)}
-              aria-label="Overlay schließen"
+              aria-label={t("app.closeOverlay")}
             >
               <CloseIcon />
             </button>
           </header>
           {storageIssues.length > 0 && (
             <div className="storage-recovery-compact" role="alert">
-              <span>Gespeicherte Daten benötigen Aufmerksamkeit.</span>
-              <button type="button" onClick={() => void setOverlay(false)}>Zur App</button>
+              <span>{t("storage.overlayAttention")}</span>
+              <button type="button" onClick={() => void setOverlay(false)}>{t("storage.backToApp")}</button>
             </div>
           )}
           <TimerCard
@@ -508,7 +506,7 @@ function App() {
       <div className="app-shell" hidden={overlayMode}>
       <aside className="sidebar">
         <Brand />
-        <nav aria-label="Hauptnavigation">
+        <nav aria-label={t("app.nav.label")}>
           <button
             type="button"
             className={activeView === "learning" ? "is-active" : ""}
@@ -516,8 +514,8 @@ function App() {
             onClick={() => setActiveView("learning")}
           >
             <LearnIcon />
-            <span className="nav-label nav-label--long">Heute lernen</span>
-            <span className="nav-label nav-label--short">Heute</span>
+            <span className="nav-label nav-label--long">{t("app.nav.learning")}</span>
+            <span className="nav-label nav-label--short">{t("app.nav.learningShort")}</span>
           </button>
           <button
             type="button"
@@ -526,8 +524,8 @@ function App() {
             onClick={() => setActiveView("dashboard")}
           >
             <HomeIcon />
-            <span className="nav-label nav-label--long">Übersicht</span>
-            <span className="nav-label nav-label--short">Übersicht</span>
+            <span className="nav-label nav-label--long">{t("app.nav.dashboard")}</span>
+            <span className="nav-label nav-label--short">{t("app.nav.dashboard")}</span>
           </button>
           <button
             type="button"
@@ -536,9 +534,9 @@ function App() {
             onClick={() => setActiveView("cards")}
           >
             <CardsIcon />
-            <span className="nav-label nav-label--long">Karteikarten</span>
-            <span className="nav-label nav-label--short">Karten</span>
-            <small>{cards.length}</small>
+            <span className="nav-label nav-label--long">{t("app.nav.cards")}</span>
+            <span className="nav-label nav-label--short">{t("app.nav.cardsShort")}</span>
+            <small>{formatNumber(cards.length)}</small>
           </button>
           <button
             type="button"
@@ -547,19 +545,19 @@ function App() {
             onClick={() => setActiveView("settings")}
           >
             <SettingsIcon />
-            <span className="nav-label nav-label--long">Einstellungen</span>
-            <span className="nav-label nav-label--short">Optionen</span>
+            <span className="nav-label nav-label--long">{t("app.nav.settings")}</span>
+            <span className="nav-label nav-label--short">{t("app.nav.settingsShort")}</span>
           </button>
         </nav>
 
         <div className="sidebar__bottom">
           <button type="button" onClick={() => void setOverlay(true)}>
             <PinIcon />
-            Always-on-top
+            {t("app.alwaysOnTop")}
           </button>
           <p className={storageIssues.length ? "sidebar-storage-error" : undefined}>
             <span />
-            {storageIssues.length ? "Speicherung benötigt Aufmerksamkeit" : "Daten lokal gespeichert"}
+            {t(storageIssues.length ? "storage.attention" : "app.savedLocally")}
           </p>
         </div>
       </aside>
@@ -567,17 +565,17 @@ function App() {
       <div className="app-main">
         {appError && (
           <div className="toast" role="alert">
-            {appError}
+            {t(appError.key, { error: localizeNativeError(appError.error) })}
             {appError && (
-              <button type="button" onClick={() => setAppError("")}>
+              <button type="button" aria-label={t("app.closeError")} onClick={() => setAppError(null)}>
                 <CloseIcon />
               </button>
             )}
           </div>
         )}
         {storageIssues.length > 0 && (
-          <div className="storage-recovery-list" aria-label="Hinweise zu gespeicherten Daten">
-            {storageIssues.map((issue) => <StorageRecoveryNotice key={issue.title} {...issue} />)}
+          <div className="storage-recovery-list" aria-label={t("storage.notices")}>
+            {storageIssues.map((issue) => <StorageRecoveryNotice key={issue.id ?? issue.title} {...issue} />)}
           </div>
         )}
 
@@ -611,16 +609,13 @@ function App() {
             onOpenSettings={() => setActiveView("settings")}
           />
         </div>
-        {activeView === "cards" && (
-          cardsRecovery.blocked ? (
-            <main className="page-content"><h1>Karteikarten wiederherstellen</h1><p>Bitte kläre den Speicherfehler oben, um deine Karten weiter zu bearbeiten.</p></main>
-          ) :
+        <fieldset hidden={activeView !== "cards"} className="storage-protected-content" disabled={cardsRecovery.blocked}>
           <FlashcardsView
             cards={cards}
             onCardsChange={setCards}
             onOpenObsidianSource={(source) => void showObsidianSource(source)}
           />
-        )}
+        </fieldset>
         {activeView === "settings" && (
           <SettingsView
             timerSettings={settings}
@@ -628,8 +623,8 @@ function App() {
             connection={obsidianConnection}
             isDesktop={isDesktop}
             isSyncing={isSyncing}
-            syncMessage={syncMessage}
-            syncError={syncError}
+            syncMessage={syncMessage ? t(syncMessage.key, syncMessage.params) : ""}
+            syncError={syncError === "storage.obsidianBlocked" ? t("storage.obsidianBlocked") : syncError ? t("app.syncFailed", { error: localizeNativeError(syncError) }) : ""}
             onTimerSettingsChange={setSettings}
             onConnect={() => void connectObsidianVault()}
             onSync={() => {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useI18n } from "../i18n";
 import {
   checkForAppUpdate,
   formatUpdateError,
@@ -15,10 +16,12 @@ interface UpdatePanelProps {
 }
 
 export function UpdatePanel({ isDesktop }: UpdatePanelProps) {
+  const { t } = useI18n();
   const [currentVersion, setCurrentVersion] = useState<string>();
   const [availableUpdate, setAvailableUpdate] = useState<AppUpdateInfo | null>(null);
   const [status, setStatus] = useState<UpdateStatus>("idle");
-  const [message, setMessage] = useState("Updates werden nur auf Knopfdruck gesucht.");
+  const [updateError, setUpdateError] = useState<unknown>();
+  const [downloadFinished, setDownloadFinished] = useState(false);
   const [progress, setProgress] = useState<number>();
 
   useEffect(() => {
@@ -35,69 +38,69 @@ export function UpdatePanel({ isDesktop }: UpdatePanelProps) {
 
   const checkForUpdates = async () => {
     setStatus("checking");
-    setMessage("FokusDeck sucht nach einer neuen Version …");
+    setUpdateError(undefined);
     setAvailableUpdate(null);
     setProgress(undefined);
     try {
       const update = await checkForAppUpdate();
       if (!update) {
         setStatus("current");
-        setMessage("Du verwendest bereits die neueste Version.");
         return;
       }
       setAvailableUpdate(update);
       setCurrentVersion(update.currentVersion);
       setStatus("available");
-      setMessage(`Version ${update.version} ist verfügbar.`);
     } catch (error) {
       setStatus("error");
-      setMessage(formatUpdateError(error));
+      setUpdateError(error);
     }
   };
 
   const installUpdate = async () => {
     if (!availableUpdate) return;
     setStatus("downloading");
-    setMessage(`Version ${availableUpdate.version} wird heruntergeladen …`);
+    setDownloadFinished(false);
+    setUpdateError(undefined);
     setProgress(undefined);
     try {
       await installPendingAppUpdate((download) => {
         setProgress(download.percent);
-        setMessage(
-          download.finished
-            ? "Download abgeschlossen. FokusDeck wird aktualisiert und neu gestartet …"
-            : `Version ${availableUpdate.version} wird heruntergeladen …`,
-        );
+        setDownloadFinished(download.finished);
       });
       setStatus("restarting");
     } catch (error) {
       setStatus("error");
-      setMessage(formatUpdateError(error));
+      setUpdateError(error);
     }
   };
 
   const isBusy = status === "checking" || status === "downloading" || status === "restarting";
+  const message = status === "error"
+    ? formatUpdateError(updateError)
+    : t(`settings.update.${status === "downloading" && downloadFinished ? "restarting" : status}`, {
+      version: availableUpdate?.version ?? "",
+    });
 
   return (
     <section className="settings-card settings-card--update">
       <div className="update-layout">
         <span className="update-mark"><DownloadIcon /></span>
         <div className="update-copy">
-          <p className="eyebrow">Anwendung</p>
-          <h2>FokusDeck aktualisieren</h2>
+          <p className="eyebrow">{t("settings.update.application")}</p>
+          <h2>{t("settings.update.title")}</h2>
           <p>
-            {currentVersion ? `Installierte Version: ${currentVersion}. ` : ""}
-            Neue Versionen werden sicher geprüft und direkt in der App installiert.
+            {currentVersion ? `${t("settings.update.installed", { version: currentVersion })} ` : ""}
+            {t("settings.update.description")}
           </p>
         </div>
         <div className="update-actions">
           {status === "available" ? (
             <button type="button" className="primary-button" onClick={() => void installUpdate()}>
-              <DownloadIcon /> Version {availableUpdate?.version} installieren
+              <DownloadIcon /> {t("settings.update.install", { version: availableUpdate?.version ?? "" })}
             </button>
           ) : status === "downloading" || status === "restarting" ? (
             <button type="button" className="primary-button" disabled>
-              <DownloadIcon /> Update wird installiert …
+              <DownloadIcon /> {t("settings.update.installing")}
             </button>
           ) : (
             <button
@@ -107,7 +110,7 @@ export function UpdatePanel({ isDesktop }: UpdatePanelProps) {
               disabled={!isDesktop || isBusy}
             >
               {status === "current" ? <CheckIcon /> : <RefreshIcon className={status === "checking" ? "is-spinning" : ""} />}
-              {status === "checking" ? "Suche …" : "Nach Updates suchen"}
+              {t(status === "checking" ? "settings.update.searching" : "settings.update.check")}
             </button>
           )}
         </div>
@@ -115,7 +118,7 @@ export function UpdatePanel({ isDesktop }: UpdatePanelProps) {
 
       {!isDesktop ? (
         <p className="update-feedback is-neutral" role="status">
-          Die Update-Funktion ist in der installierten Desktop-App verfügbar.
+          {t("settings.update.desktopHint")}
         </p>
       ) : (
         <p className={`update-feedback ${status === "error" ? "is-error" : status === "current" ? "is-success" : "is-neutral"}`} role="status" aria-live="polite">
@@ -127,7 +130,7 @@ export function UpdatePanel({ isDesktop }: UpdatePanelProps) {
         <div
           className="update-progress"
           role="progressbar"
-          aria-label="Update-Fortschritt"
+          aria-label={t("settings.update.progressLabel")}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={progress}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import type { Flashcard, ObsidianSource } from "../types";
+import { formatNumber, useI18n } from "../i18n";
 import {
   loadCollectionFile,
   mergeCollection,
@@ -8,7 +9,7 @@ import {
   type FokusDeckCollection,
 } from "../lib/collection";
 import { loadCsvFile } from "../lib/csv";
-import { isTauriDesktop } from "../lib/obsidian";
+import { isTauriDesktop, localizeNativeError } from "../lib/obsidian";
 import { reviewLearningCard, summarizeLearning } from "../lib/learning";
 import {
   CardsIcon,
@@ -34,6 +35,10 @@ interface PendingImport {
   source: "collection" | "csv";
 }
 
+type CollectionFeedback =
+  | { kind: "saved"; name: string; count: number }
+  | { kind: "import"; name: string; source: PendingImport["source"]; imported: number; updated: number; skipped: number };
+
 function createId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 }
@@ -43,27 +48,28 @@ export function FlashcardsView({
   onCardsChange,
   onOpenObsidianSource,
 }: FlashcardsViewProps) {
-  const [selectedDeck, setSelectedDeck] = useState("Alle Karten");
+  const { t } = useI18n();
+  const [selectedDeck, setSelectedDeck] = useState<string | null>(null);
   const [cardIndex, setCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
-  const [deck, setDeck] = useState("Allgemein");
+  const [deck, setDeck] = useState("");
   const [isCollectionBusy, setIsCollectionBusy] = useState(false);
-  const [collectionMessage, setCollectionMessage] = useState("");
-  const [collectionError, setCollectionError] = useState("");
+  const [collectionMessage, setCollectionMessage] = useState<CollectionFeedback | null>(null);
+  const [collectionError, setCollectionError] = useState<{ key: string; error: unknown } | null>(null);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const isDesktop = isTauriDesktop();
 
   const decks = useMemo(
-    () => ["Alle Karten", ...Array.from(new Set(cards.map((card) => card.deck)))],
+    () => Array.from(new Set(cards.map((card) => card.deck))),
     [cards],
   );
 
   const filteredCards = useMemo(
     () =>
-      selectedDeck === "Alle Karten"
+      selectedDeck === null
         ? cards
         : cards.filter((card) => card.deck === selectedDeck),
     [cards, selectedDeck],
@@ -87,15 +93,11 @@ export function FlashcardsView({
     if (!pendingImport) return;
     const result = mergeCollection(cards, pendingImport.collection);
     onCardsChange(result.cards);
-    setSelectedDeck("Alle Karten");
-    const sourceText = pendingImport.source === "csv" ? " aus CSV importiert" : " geladen";
-    setCollectionMessage(
-      `${pendingImport.collection.name}: ${result.imported} ${result.imported === 1 ? "Karte" : "Karten"}${sourceText}` +
-        (result.updated
-          ? `, ${result.updated} ${result.updated === 1 ? "Lernstand" : "Lernstände"} aktualisiert`
-          : "") +
-        (result.skipped ? `, ${result.skipped} Dubletten übersprungen.` : "."),
-    );
+    setSelectedDeck(null);
+    setCollectionMessage({
+      kind: "import", name: pendingImport.collection.name, source: pendingImport.source,
+      imported: result.imported, updated: result.updated, skipped: result.skipped,
+    });
     setPendingImport(null);
   }, [cards, onCardsChange, pendingImport]);
 
@@ -125,6 +127,7 @@ export function FlashcardsView({
       id: createId(),
       front: front.trim(),
       back: back.trim(),
+      // Keep the historical default stable across languages and CSV imports.
       deck: deck.trim() || "Allgemein",
       mastered: false,
       createdAt: new Date().toISOString(),
@@ -144,16 +147,14 @@ export function FlashcardsView({
 
   const loadCollection = async () => {
     setIsCollectionBusy(true);
-    setCollectionMessage("");
-    setCollectionError("");
+    setCollectionMessage(null);
+    setCollectionError(null);
     try {
       const collection = await loadCollectionFile();
       if (!collection) return;
       setPendingImport({ collection, source: "collection" });
     } catch (error) {
-      setCollectionError(
-        error instanceof Error ? error.message : `Laden fehlgeschlagen: ${String(error)}`,
-      );
+      setCollectionError({ key: "study.feedback.loadFailed", error });
     } finally {
       setIsCollectionBusy(false);
     }
@@ -161,16 +162,14 @@ export function FlashcardsView({
 
   const importCsv = async () => {
     setIsCollectionBusy(true);
-    setCollectionMessage("");
-    setCollectionError("");
+    setCollectionMessage(null);
+    setCollectionError(null);
     try {
       const collection = await loadCsvFile();
       if (!collection) return;
       setPendingImport({ collection, source: "csv" });
     } catch (error) {
-      setCollectionError(
-        error instanceof Error ? error.message : `CSV-Import fehlgeschlagen: ${String(error)}`,
-      );
+      setCollectionError({ key: "study.feedback.csvFailed", error });
     } finally {
       setIsCollectionBusy(false);
     }
@@ -178,21 +177,17 @@ export function FlashcardsView({
 
   const saveCollection = async () => {
     setIsCollectionBusy(true);
-    setCollectionMessage("");
-    setCollectionError("");
+    setCollectionMessage(null);
+    setCollectionError(null);
     try {
       const collectionName =
-        selectedDeck === "Alle Karten" ? "FokusDeck-Sammlung" : selectedDeck;
+        selectedDeck === null ? "FokusDeck-Sammlung" : selectedDeck;
       const saved = await saveCollectionFile(filteredCards, collectionName);
       if (saved) {
-        setCollectionMessage(
-          `${filteredCards.length} ${filteredCards.length === 1 ? "Karte" : "Karten"} als ${collectionName} gespeichert.`,
-        );
+        setCollectionMessage({ kind: "saved", name: collectionName, count: filteredCards.length });
       }
     } catch (error) {
-      setCollectionError(
-        error instanceof Error ? error.message : `Speichern fehlgeschlagen: ${String(error)}`,
-      );
+      setCollectionError({ key: "study.feedback.saveFailed", error });
     } finally {
       setIsCollectionBusy(false);
     }
@@ -202,9 +197,9 @@ export function FlashcardsView({
     <main className="page-content flashcards-page">
       <header className="page-intro page-intro--cards">
         <div>
-          <p className="eyebrow">Wissen festigen</p>
-          <h1>Deine Karteikarten</h1>
-          <p>Aktives Abrufen macht aus Gelesenem langfristiges Wissen.</p>
+          <p className="eyebrow">{t("study.cards.eyebrow")}</p>
+          <h1>{t("study.cards.title")}</h1>
+          <p>{t("study.cards.description")}</p>
         </div>
         <div className="collection-actions">
           <button
@@ -212,20 +207,20 @@ export function FlashcardsView({
             className="secondary-button"
             onClick={() => void importCsv()}
             disabled={!isDesktop || isCollectionBusy}
-            title={isDesktop ? "Karteikarten aus einer CSV-Datei importieren" : "Nur in der Desktop-App verfügbar"}
+            title={t(isDesktop ? "study.cards.csvHint" : "study.desktopOnly")}
           >
             <CsvIcon />
-            CSV importieren
+            {t("study.cards.importCsv")}
           </button>
           <button
             type="button"
             className="secondary-button"
             onClick={() => void loadCollection()}
             disabled={!isDesktop || isCollectionBusy}
-            title={isDesktop ? "Eine FokusDeck-Sammlung dazuladen" : "Nur in der Desktop-App verfügbar"}
+            title={t(isDesktop ? "study.cards.loadHint" : "study.desktopOnly")}
           >
             <LoadIcon />
-            Sammlung laden
+            {t("study.cards.load")}
           </button>
           <button
             type="button"
@@ -233,13 +228,13 @@ export function FlashcardsView({
             onClick={() => void saveCollection()}
             disabled={!isDesktop || isCollectionBusy || filteredCards.length === 0}
             title={
-              selectedDeck === "Alle Karten"
-                ? "Alle Karten als Sammlung speichern"
-                : `Den Stapel ${selectedDeck} als Sammlung speichern`
+              selectedDeck === null
+                ? t("study.cards.saveAllHint")
+                : t("study.cards.saveDeckHint", { name: selectedDeck })
             }
           >
             <SaveIcon />
-            Sammlung speichern
+            {t("study.cards.save")}
           </button>
           <button
             type="button"
@@ -247,7 +242,7 @@ export function FlashcardsView({
             onClick={() => setShowForm((current) => !current)}
           >
             <PlusIcon />
-            Neue Karte
+            {t("study.cards.new")}
           </button>
         </div>
       </header>
@@ -257,7 +252,15 @@ export function FlashcardsView({
           className={`collection-feedback ${collectionError ? "is-error" : "is-success"}`}
           role="status"
         >
-          {collectionError || collectionMessage}
+          {collectionError
+            ? t(collectionError.key, { error: localizeNativeError(collectionError.error) })
+            : collectionMessage?.kind === "saved"
+              ? t("study.feedback.saved", { name: collectionMessage.name, count: collectionMessage.count })
+              : collectionMessage?.kind === "import"
+                ? t(collectionMessage.source === "csv" ? "study.feedback.csvLoaded" : "study.feedback.loaded", { name: collectionMessage.name, count: collectionMessage.imported })
+                  + (collectionMessage.updated ? t("study.feedback.updated", { count: collectionMessage.updated }) : "")
+                  + (collectionMessage.skipped ? t("study.feedback.skipped", { count: collectionMessage.skipped }) : ".")
+                : null}
         </p>
       )}
 
@@ -265,52 +268,52 @@ export function FlashcardsView({
         <form className="new-card-form" onSubmit={addCard}>
           <div className="section-heading section-heading--small">
             <div>
-              <p className="eyebrow">Neue Lernkarte</p>
-              <h2>Frage und Antwort eintragen</h2>
+              <p className="eyebrow">{t("study.cards.formEyebrow")}</p>
+              <h2>{t("study.cards.formTitle")}</h2>
             </div>
           </div>
           <label>
-            <span>Vorderseite / Frage</span>
+            <span>{t("study.cards.frontLabel")}</span>
             <textarea
               value={front}
               onChange={(event) => setFront(event.target.value)}
-              placeholder="z. B. Was bedeutet Photosynthese?"
+              placeholder={t("study.cards.frontPlaceholder")}
               maxLength={1_000}
               autoFocus
               required
             />
           </label>
           <label>
-            <span>Rückseite / Antwort</span>
+            <span>{t("study.cards.backLabel")}</span>
             <textarea
               value={back}
               onChange={(event) => setBack(event.target.value)}
-              placeholder="Deine kurze, eindeutige Antwort"
+              placeholder={t("study.cards.backPlaceholder")}
               maxLength={4_000}
               required
             />
           </label>
           <label>
-            <span>Stapel</span>
+            <span>{t("study.deck")}</span>
             <input
               value={deck}
               onChange={(event) => setDeck(event.target.value)}
-              placeholder="Allgemein"
+              placeholder={t("study.generalDeck")}
               maxLength={100}
               list="deck-options"
             />
             <datalist id="deck-options">
-              {decks.slice(1).map((deckName) => (
+              {decks.map((deckName) => (
                 <option key={deckName} value={deckName} />
               ))}
             </datalist>
           </label>
           <div className="new-card-form__actions">
             <button type="button" className="text-button" onClick={() => setShowForm(false)}>
-              Abbrechen
+              {t("study.cancel")}
             </button>
             <button type="submit" className="primary-button">
-              Karte speichern
+              {t("study.cards.saveCard")}
             </button>
           </div>
         </form>
@@ -320,31 +323,31 @@ export function FlashcardsView({
         <aside className="decks-panel">
           <div className="decks-panel__heading">
             <LayersIcon />
-            <strong>Stapel</strong>
+            <strong>{t("study.decks")}</strong>
           </div>
           <div className="deck-list">
-            {decks.map((deckName) => {
+            {[null, ...decks].map((deckName) => {
               const count =
-                deckName === "Alle Karten"
+                deckName === null
                   ? cards.length
                   : cards.filter((card) => card.deck === deckName).length;
               return (
                 <button
-                  key={deckName}
+                  key={deckName === null ? "all" : `deck:${deckName}`}
                   type="button"
                   className={selectedDeck === deckName ? "is-active" : ""}
                   onClick={() => setSelectedDeck(deckName)}
                 >
-                  <span>{deckName}</span>
-                  <small>{count}</small>
+                  <span>{deckName ?? t("study.cards.allCards")}</span>
+                  <small>{formatNumber(count)}</small>
                 </button>
               );
             })}
           </div>
           <div className="deck-progress">
             <div>
-              <span>Heute fällig</span>
-              <strong>{dueCount}/{filteredCards.length}</strong>
+              <span>{t("study.cards.dueToday")}</span>
+              <strong>{formatNumber(dueCount)}/{formatNumber(filteredCards.length)}</strong>
             </div>
             <span className="progress-track">
               <span
@@ -365,21 +368,21 @@ export function FlashcardsView({
                   {currentCard.source && " · Obsidian"}
                 </span>
                 <span>
-                  Karte {cardIndex + 1} von {filteredCards.length}
+                  {t("study.cardPosition", { position: cardIndex + 1, total: filteredCards.length })}
                 </span>
               </div>
               <button
                 type="button"
                 className={`flashcard ${isFlipped ? "is-flipped" : ""}`}
                 onClick={() => setIsFlipped((current) => !current)}
-                aria-label={`${isFlipped ? "Antwort" : "Frage"}: ${isFlipped ? currentCard.back : currentCard.front}. Klicken zum ${isFlipped ? "Zurückdrehen" : "Aufdecken"}.`}
+                aria-label={t(isFlipped ? "study.cards.answerAria" : "study.cards.questionAria", { text: isFlipped ? currentCard.back : currentCard.front })}
               >
                 <span className="flashcard__label">
-                  {isFlipped ? "ANTWORT" : "FRAGE"}
+                  {t(isFlipped ? "study.cards.answerLabel" : "study.cards.questionLabel")}
                 </span>
                 <strong>{isFlipped ? currentCard.back : currentCard.front}</strong>
                 <span className="flashcard__hint">
-                  Karte anklicken zum {isFlipped ? "Zurückdrehen" : "Aufdecken"}
+                  {t(isFlipped ? "study.cards.flipBackHint" : "study.cards.revealHint")}
                 </span>
               </button>
 
@@ -389,7 +392,7 @@ export function FlashcardsView({
                   className="study-action study-action--repeat"
                   onClick={() => updateMastery(false)}
                 >
-                  Nochmal
+                  {t("study.cards.again")}
                 </button>
                 <button
                   type="button"
@@ -397,14 +400,14 @@ export function FlashcardsView({
                   onClick={() => updateMastery(true)}
                 >
                   <CheckIcon />
-                  Gut
+                  {t("study.cards.good")}
                 </button>
                 <button
                   type="button"
                   className="study-action study-action--next"
                   onClick={goToNextCard}
                 >
-                  Weiter
+                  {t("study.cards.next")}
                   <ChevronIcon />
                 </button>
               </div>
@@ -417,7 +420,7 @@ export function FlashcardsView({
                   title={currentCard.source.relativePath}
                 >
                   <ExternalLinkIcon />
-                  In Obsidian öffnen · {currentCard.source.relativePath}
+                  {t("study.cards.openObsidian", { path: currentCard.source.relativePath })}
                 </button>
               ) : (
                 <button
@@ -426,18 +429,18 @@ export function FlashcardsView({
                   onClick={deleteCurrentCard}
                 >
                   <TrashIcon />
-                  Karte löschen
+                  {t("study.cards.delete")}
                 </button>
               )}
             </>
           ) : (
             <div className="empty-state">
               <span><CardsIcon /></span>
-              <h2>Noch keine Karten in diesem Stapel</h2>
-              <p>Erstelle eine Karte und beginne direkt mit dem Abrufen.</p>
+              <h2>{t("study.cards.emptyTitle")}</h2>
+              <p>{t("study.cards.emptyDescription")}</p>
               <button type="button" className="primary-button" onClick={() => setShowForm(true)}>
                 <PlusIcon />
-                Erste Karte erstellen
+                {t("study.cards.createFirst")}
               </button>
             </div>
           )}

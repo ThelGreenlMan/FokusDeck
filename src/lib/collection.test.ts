@@ -55,7 +55,7 @@ describe("FokusDeck collections", () => {
   it("does not export cards that cannot be imported again", () => {
     expect(() =>
       serializeCollection([{ ...cards[0], front: "x".repeat(1_001) }]),
-    ).toThrow("länger als 1000 Zeichen");
+    ).toThrow("länger als 1.000 Zeichen");
   });
 
   it("merges new cards and skips content duplicates", () => {

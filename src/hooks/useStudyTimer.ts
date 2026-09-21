@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TimerMode, TimerSettings } from "../types";
+import { useI18n } from "../i18n";
 
 function playCompletionTone() {
   try {
@@ -41,6 +42,7 @@ export function formatTime(totalSeconds: number) {
 }
 
 export function useStudyTimer(settings: TimerSettings) {
+  const { t, language } = useI18n();
   const [mode, setMode] = useState<TimerMode>("focus");
   const [remainingSeconds, setRemainingSeconds] = useState(() =>
     secondsFor("focus", settings),
@@ -101,11 +103,11 @@ export function useStudyTimer(settings: TimerSettings) {
   }, [isRunning, moveToNextPhase]);
 
   useEffect(() => {
-    document.title = `${formatTime(remainingSeconds)} · ${mode === "focus" ? "Fokus" : "Pause"} · FokusDeck`;
+    document.title = `${formatTime(remainingSeconds)} · ${t(mode === "focus" ? "timer.focus" : "timer.break")} · FokusDeck`;
     return () => {
       document.title = "FokusDeck";
     };
-  }, [remainingSeconds, mode]);
+  }, [remainingSeconds, mode, language, t]);
 
   const start = useCallback(() => {
     deadlineRef.current = Date.now() + remainingSeconds * 1000;

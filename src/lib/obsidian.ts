@@ -3,6 +3,33 @@ import type {
   ObsidianConnection,
   ObsidianSource,
 } from "../types";
+import { t } from "../i18n";
+import germanSettings from "../i18n/locales/de/settings.json";
+
+// Native commands retain their existing wire format. Translate only known messages,
+// leaving file paths and unknown diagnostic details exactly as received.
+const nativeErrorKeys = new Map(
+  Object.entries(germanSettings)
+    .filter(([key, value]) => key.startsWith("settings.native.") && typeof value === "string" && !value.includes("{path}"))
+    .map(([key, value]) => [value, key]),
+);
+
+export function localizeNativeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (!message) return t("settings.native.unknown");
+  if (message === "FOKUSDECK_VAULT_DESKTOP_ONLY") return t("settings.vaultDesktopOnly");
+  if (message === "FOKUSDECK_LINKS_DESKTOP_ONLY") return t("settings.linksDesktopOnly");
+  const key = nativeErrorKeys.get(message);
+  if (key) return t(key);
+
+  for (const pathKey of ["settings.native.backupRetained", "settings.native.cleanupBackup"] as const) {
+    const [prefix, suffix] = germanSettings[pathKey].split("{path}");
+    if (message.startsWith(prefix) && message.endsWith(suffix)) {
+      return t(pathKey, { path: message.slice(prefix.length, message.length - suffix.length) });
+    }
+  }
+  return message;
+}
 
 export interface VaultNote {
   relativePath: string;
@@ -24,7 +51,7 @@ interface ParsedFrontmatter {
 }
 
 export function isTauriDesktop() {
-  return Boolean(window.__TAURI_INTERNALS__);
+  return typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);
 }
 
 function unquote(value: string) {
@@ -187,14 +214,14 @@ export async function chooseObsidianVault() {
   const selected = await open({
     directory: true,
     multiple: false,
-    title: "Obsidian-Vault auswählen",
+    title: t("settings.chooseVaultDialog"),
   });
   return typeof selected === "string" ? selected : null;
 }
 
 export async function scanObsidianVault(vaultPath: string) {
   if (!isTauriDesktop()) {
-    throw new Error("Die Vault-Auswahl ist nur in der Desktop-App verfügbar.");
+    throw new Error("FOKUSDECK_VAULT_DESKTOP_ONLY");
   }
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke<VaultScanResult>("scan_obsidian_vault", { vaultPath });
@@ -202,7 +229,7 @@ export async function scanObsidianVault(vaultPath: string) {
 
 export async function openObsidianSource(source: ObsidianSource) {
   if (!isTauriDesktop()) {
-    throw new Error("Obsidian-Links sind nur in der Desktop-App verfügbar.");
+    throw new Error("FOKUSDECK_LINKS_DESKTOP_ONLY");
   }
   const { openUrl } = await import("@tauri-apps/plugin-opener");
   const file = source.relativePath.replace(/\.md$/i, "");

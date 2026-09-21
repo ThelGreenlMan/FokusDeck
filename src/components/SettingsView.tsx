@@ -1,4 +1,5 @@
 import type { ObsidianConnection, TimerSettings } from "../types";
+import { formatDate, formatNumber, useI18n } from "../i18n";
 import {
   CheckIcon,
   FolderIcon,
@@ -21,14 +22,6 @@ interface SettingsViewProps {
   onDisconnect: () => void;
 }
 
-function formatSyncTime(timestamp: number) {
-  if (!timestamp) return "Noch nicht synchronisiert";
-  return new Intl.DateTimeFormat("de-DE", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(timestamp));
-}
-
 export function SettingsView({
   timerSettings,
   timerSettingsLocked,
@@ -42,6 +35,7 @@ export function SettingsView({
   onSync,
   onDisconnect,
 }: SettingsViewProps) {
+  const { t, language, languages, setLanguage, languageStorageError } = useI18n();
   const updateMinutes = (key: keyof TimerSettings, rawValue: string) => {
     const value = Math.max(1, Math.min(180, Number(rawValue) || 1));
     onTimerSettingsChange({ ...timerSettings, [key]: value });
@@ -51,35 +45,54 @@ export function SettingsView({
     <main className="page-content settings-page">
       <header className="page-intro page-intro--settings">
         <div>
-          <p className="eyebrow">FokusDeck anpassen</p>
-          <h1>Einstellungen</h1>
-          <p>
-            Verbinde deinen Wissensspeicher und lege einen Lernrhythmus fest,
-            der zu dir passt.
-          </p>
+          <p className="eyebrow">{t("settings.eyebrow")}</p>
+          <h1>{t("settings.title")}</h1>
+          <p>{t("settings.intro")}</p>
         </div>
       </header>
 
       <div className="settings-grid">
+        <section className="settings-card settings-card--language">
+          <div className="settings-card__heading">
+            <h2>{t("settings.languageTitle")}</h2>
+          </div>
+          <div className="settings-fields">
+            <label>
+              <span>{t("settings.languageLabel")}</span>
+              <select
+                className="settings-language-select"
+                value={language}
+                onChange={(event) => setLanguage(event.target.value)}
+              >
+                {languages.map((option) => (
+                  <option key={option.code} value={option.code} lang={option.code}>{option.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className="settings-note">{t("settings.languageHint")}</p>
+          {languageStorageError && (
+            <p className="sync-feedback is-error" role="status">{t("settings.languageUnsaved")}</p>
+          )}
+        </section>
+
         <section className="settings-card settings-card--obsidian">
           <div className="settings-card__heading">
             <span className="obsidian-mark" aria-hidden="true">◇</span>
             <div>
-              <p className="eyebrow">Integration</p>
-              <h2>Obsidian-Vault</h2>
+              <p className="eyebrow">{t("settings.integration")}</p>
+              <h2>{t("settings.obsidianTitle")}</h2>
             </div>
             {connection && (
               <span className="connection-pill">
-                <CheckIcon /> Verbunden
+                <CheckIcon /> {t("settings.connected")}
               </span>
             )}
           </div>
 
           {!isDesktop && (
             <div className="desktop-required">
-              Die Vault-Auswahl wird in der Tauri-Desktop-App aktiv. Die
-              Browser-Vorschau kann aus Sicherheitsgründen keine lokalen
-              Ordner lesen.
+              {t("settings.desktopRequired")}
             </div>
           )}
 
@@ -95,16 +108,18 @@ export function SettingsView({
 
               <div className="vault-stats">
                 <div>
-                  <strong>{connection.importedCards}</strong>
-                  <span>importierte Karten</span>
+                  <strong>{formatNumber(connection.importedCards)}</strong>
+                  <span>{t("settings.importedCards", { count: connection.importedCards })}</span>
                 </div>
                 <div>
-                  <strong>{connection.scannedMarkdownFiles}</strong>
-                  <span>Markdown-Dateien geprüft</span>
+                  <strong>{formatNumber(connection.scannedMarkdownFiles)}</strong>
+                  <span>{t("settings.scannedFiles", { count: connection.scannedMarkdownFiles })}</span>
                 </div>
                 <div>
-                  <strong>{formatSyncTime(connection.lastSyncAt)}</strong>
-                  <span>letzte Synchronisierung</span>
+                  <strong>{connection.lastSyncAt
+                    ? formatDate(new Date(connection.lastSyncAt), { dateStyle: "short", timeStyle: "short" })
+                    : t("settings.neverSynced")}</strong>
+                  <span>{t("settings.lastSync")}</span>
                 </div>
               </div>
 
@@ -116,7 +131,7 @@ export function SettingsView({
                   disabled={isSyncing || !isDesktop}
                 >
                   <RefreshIcon className={isSyncing ? "is-spinning" : ""} />
-                  {isSyncing ? "Synchronisiere …" : "Jetzt synchronisieren"}
+                  {t(isSyncing ? "settings.syncing" : "settings.syncNow")}
                 </button>
                 <button
                   type="button"
@@ -124,14 +139,14 @@ export function SettingsView({
                   onClick={onConnect}
                   disabled={!isDesktop}
                 >
-                  Anderen Vault wählen
+                  {t("settings.chooseAnotherVault")}
                 </button>
                 <button
                   type="button"
                   className="danger-text-button"
                   onClick={onDisconnect}
                 >
-                  Verbindung trennen
+                  {t("settings.disconnect")}
                 </button>
               </div>
             </>
@@ -139,11 +154,8 @@ export function SettingsView({
             <div className="connect-empty-state">
               <span><LinkIcon /></span>
               <div>
-                <strong>Obsidian mit FokusDeck verbinden</strong>
-                <p>
-                  FokusDeck liest ausschließlich markierte Markdown-Dateien.
-                  Bestehende Vault-Dateien werden nicht verändert.
-                </p>
+                <strong>{t("settings.connectTitle")}</strong>
+                <p>{t("settings.connectHint")}</p>
               </div>
               <button
                 type="button"
@@ -151,7 +163,7 @@ export function SettingsView({
                 onClick={onConnect}
                 disabled={!isDesktop || isSyncing}
               >
-                <FolderIcon /> Vault auswählen
+                <FolderIcon /> {t("settings.chooseVault")}
               </button>
             </div>
           )}
@@ -166,13 +178,13 @@ export function SettingsView({
         <section className="settings-card">
           <div className="settings-card__heading">
             <div>
-              <p className="eyebrow">Lernrhythmus</p>
-              <h2>Timer-Vorgaben</h2>
+              <p className="eyebrow">{t("settings.rhythm")}</p>
+              <h2>{t("settings.timerDefaults")}</h2>
             </div>
           </div>
           <div className="settings-fields">
             <label>
-              <span>Lerndauer</span>
+              <span>{t("settings.focusDuration")}</span>
               <span className="settings-number-input">
                 <input
                   type="number"
@@ -182,11 +194,11 @@ export function SettingsView({
                   disabled={timerSettingsLocked}
                   onChange={(event) => updateMinutes("focusMinutes", event.target.value)}
                 />
-                Minuten
+                {t("settings.minutes")}
               </span>
             </label>
             <label>
-              <span>Pausendauer</span>
+              <span>{t("settings.breakDuration")}</span>
               <span className="settings-number-input">
                 <input
                   type="number"
@@ -196,40 +208,28 @@ export function SettingsView({
                   disabled={timerSettingsLocked}
                   onChange={(event) => updateMinutes("breakMinutes", event.target.value)}
                 />
-                Minuten
+                {t("settings.minutes")}
               </span>
             </label>
           </div>
           <p className="settings-note">
-            {timerSettingsLocked
-              ? "Setze die aktuelle Phase zurück, um die Timer-Vorgaben zu ändern."
-              : "Änderungen werden lokal gespeichert und beim nächsten Start wieder verwendet."}
+            {t(timerSettingsLocked ? "settings.timerLocked" : "settings.timerSaved")}
           </p>
         </section>
 
         <section className="settings-card settings-card--format">
           <div className="settings-card__heading">
             <div>
-              <p className="eyebrow">Kartenformat</p>
-              <h2>Eine Obsidian-Notiz markieren</h2>
+              <p className="eyebrow">{t("settings.cardFormat")}</p>
+              <h2>{t("settings.markNote")}</h2>
             </div>
           </div>
           <p>
-            Ergänze am Anfang einer Notiz die Eigenschaft
-            <code>fokusdeck: true</code>. Die erste Überschrift wird zur Frage,
-            der restliche Text zur Antwort.
+            {t("settings.formatBefore")} <code>fokusdeck: true</code>{t("settings.formatAfter")}
           </p>
-          <pre><code>{`---
-fokusdeck: true
-deck: Biologie
----
-# Was ist Photosynthese?
-
-Pflanzen wandeln Lichtenergie
-in chemische Energie um.`}</code></pre>
+          <pre><code>{t("settings.formatExample")}</code></pre>
           <p className="format-hint">
-            Alternativ kannst du <code>question:</code> und <code>answer:</code>
-            direkt in den Eigenschaften angeben.
+            {t("settings.formatAlternativeBefore")} <code>question:</code> {t("settings.formatAlternativeAnd")} <code>answer:</code> {t("settings.formatAlternativeAfter")}
           </p>
         </section>
 

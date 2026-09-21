@@ -2,7 +2,7 @@
 
 FokusDeck ist eine derzeit für Windows veröffentlichte, lokale Desktop-App für konzentriertes Lernen. Sie kombiniert einen frei konfigurierbaren Lern- und Pausentimer mit digitalen Karteikarten und einer kompakten Always-on-top-Ansicht.
 
-## Funktionen in Version 0.4.0
+## Funktionen in Version 0.5.0
 
 - Lern- und Pausendauer frei einstellen
 - Ein konkretes Lernziel je Fokusphase festlegen und im Overlay anzeigen
@@ -21,14 +21,31 @@ FokusDeck ist eine derzeit für Windows veröffentlichte, lokale Desktop-App fü
 - Schreibgeschützte Obsidian-Anbindung mit automatischer Synchronisierung
 - Obsidian-Karten direkt aus FokusDeck in der Ursprungsnotiz öffnen
 - Responsive Oberfläche und verständliche Tastatur-Fokuszustände
+- Deutsch/Englisch sofort umschalten, einschließlich Timer, Overlay und Lernmethoden
+- Vollständige Vorlage und automatische Prüfungen für weitere Übersetzungen
+- Offene Kartenentwürfe beim Wechsel zwischen Kartenansicht und Einstellungen erhalten
 
 ## Warum diese Technik?
 
 Die UI entsteht mit **TypeScript und React**. Das macht Zustände wie Timer, Kartenstapel und Lernfortschritt übersichtlich und gut testbar. **Tauri 2** stellt die native Desktop-Hülle bereit; der kleine Rust-Kern erlaubt ein echtes Always-on-top-Fenster und später native Benachrichtigungen oder globale Tastenkürzel. Im Vergleich zu einer reinen Browser-App kann das Overlay dadurch zuverlässig über anderen Programmen bleiben.
 
+## Sprache / Language
+
+Unter **Einstellungen → Sprache / Language** lässt sich die Oberfläche sofort
+zwischen Deutsch und Englisch umstellen, ohne einen Neustart. Die Auswahl wird
+lokal gespeichert; Deutsch bleibt die Voreinstellung. Timer und Overlay,
+Lernmethoden, Import/Export, Obsidian und Updates verwenden die gewählte Sprache.
+Laufende Timer und Lernrunden bleiben erhalten. Eigene Karten, Stapelnamen, Ziele,
+Notizen und bereits gespeicherte Inhalte werden nicht automatisch übersetzt.
+
+**English:** Choose **Einstellungen → Sprache / Language → English** to switch the
+interface immediately. Your study content stays unchanged. To contribute another
+language, follow the [translation guide and complete template](translations/README.md).
+Available from version 0.5.0. Existing study content is not automatically translated.
+
 ## Voraussetzungen
 
-- Node.js 22 LTS ab 22.22.2 oder Node.js 24 LTS ab 24.15.0
+- Node.js 22.22.2+ oder 24.15+ (LTS; auch für die UI-Tests)
 - pnpm 11
 - Rust mit dem stabilen MSVC-Toolchain
 - Unter Windows: Microsoft C++ Build Tools und WebView2
@@ -67,6 +84,7 @@ Parser-, Speicher- und Oberflächentests sowie Frontend-Build prüfen:
 
 ```powershell
 pnpm test
+pnpm check:translations
 pnpm build
 ```
 
@@ -133,12 +151,16 @@ Gespeicherte Dateien enden auf `.fokusdeck.json` und enthalten Fragen, Antworten
 
 ## Schutz bei Speicherfehlern
 
+Dieser Schutz ist in PR #19 vorbereitet und noch nicht Teil der veröffentlichten Version 0.5.0.
+
 Kann FokusDeck gespeicherte Daten nicht lesen oder ihr Format nicht verarbeiten, wird das automatische Speichern für den betroffenen Bereich gesperrt. Die ursprünglichen Daten werden nicht mit Standardwerten überschrieben. Ein Hinweis bleibt in allen Ansichten sichtbar; im Overlay führt **Zur App** zu den Wiederherstellungsoptionen.
 
 - **Erneut versuchen** lädt einen blockierten Bereich erneut. Nach einem vorübergehenden Speicherfehler versucht FokusDeck stattdessen, die noch offenen Änderungen zu speichern. Bei einer erkannten zwischenzeitlichen Änderung weist die App darauf hin, dass erneutes Laden die offenen Änderungen verwirft.
 - **Letzte Sicherung wiederherstellen** ist verfügbar, wenn eine lesbare lokale Sicherung existiert. Vor jedem normalen Überschreiben wird der vorherige gespeicherte Stand gesichert.
 - **Originaldaten exportieren** und bei Bedarf **Ungespeicherte Änderungen sichern** schreiben den jeweiligen unveränderten Inhalt in eine separate Reparaturdatei. Diese Dateien enden auf `.fokusdeck.json`, sind jedoch keine direkt importierbaren Kartensammlungen. Sie können persönliche Inhalte und lokale Obsidian-Pfade enthalten; teile sie nur bewusst.
 - **Mit Standardwerten neu beginnen** erfordert eine Bestätigung. Vor Wiederherstellung oder Zurücksetzen wird das ursprüngliche Original separat archiviert. Schlägt diese Sicherung fehl, wird das Original nicht ersetzt.
+
+Laufende Lernansichten und Kartenentwürfe bleiben bei einer Speicherblockierung geöffnet; ihre Bedienung wird gesperrt und Prüfungs-/Erinnerungstimer pausieren. Nach erfolgreicher Wiederholung lässt sich ohne Verlust der Eingaben weiterarbeiten. Mehrkartenbewertungen werden als vollständiger Kartenstand gespeichert oder gemeinsam als ungespeichert erhalten. Wiederherstellungshinweise sind auf Deutsch und Englisch verfügbar.
 
 Bei Schreibfehlern bleiben neue Änderungen nur in der geöffneten App erhalten, bis sie erfolgreich gespeichert oder exportiert wurden. Schließe die App in diesem Fall erst danach. Automatische Obsidian-Schreibvorgänge in den lokalen App-Speicher werden bei betroffenen Speicherfehlern pausiert; Obsidian-Dateien selbst werden weiterhin nur gelesen.
 
@@ -163,6 +185,8 @@ src/                     React-/TypeScript-Oberfläche
   components/            Timer, Dashboard, Karteikarten und Lernmodi
   hooks/                 Timerlogik und lokale Speicherung
   lib/                   Lernplanung, Parser und native Anbindung
+  i18n/locales/          Lokal gebündelte Übersetzungen und Sprachmetadaten
+translations/            Anleitung und vollständige Übersetzungsvorlage
 src-tauri/               Native Tauri-/Rust-Hülle
   capabilities/          Eng begrenzte Fensterberechtigungen
   nsis/                  Angepasster Windows-Upgrade-Installer

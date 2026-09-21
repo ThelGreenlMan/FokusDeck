@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { useI18n } from "../i18n";
 import type { TimerSettings } from "../types";
 import { formatTime } from "../hooks/useStudyTimer";
 import {
@@ -47,12 +48,13 @@ export function TimerCard({
   onSettingsChange,
   onFocusGoalChange,
 }: TimerCardProps) {
+  const { t } = useI18n();
   const goalInputId = useId();
   const goalHintId = useId();
   const elapsed = totalSeconds - remainingSeconds;
   const progress = Math.max(0, Math.min(1, elapsed / totalSeconds));
   const progressDegrees = Math.round(progress * 360);
-  const modeLabel = mode === "focus" ? "Fokuszeit" : "Erholungspause";
+  const modeLabel = t(mode === "focus" ? "timer.focusMode" : "timer.breakMode");
   const visibleFocusGoal = focusGoal.trim();
   const isGoalReadOnly = focusGoalLocked ?? isRunning;
 
@@ -67,8 +69,8 @@ export function TimerCard({
       {!compact && (
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Lern-Timer</p>
-            <h2>Deine nächste Fokusphase</h2>
+            <p className="eyebrow">{t("timer.eyebrow")}</p>
+            <h2>{t("timer.heading")}</h2>
           </div>
           <span className={`mode-pill mode-pill--${mode}`}>
             <span />
@@ -81,13 +83,13 @@ export function TimerCard({
         <div
           className="timer-ring"
           style={{ "--progress": `${progressDegrees}deg` } as React.CSSProperties}
-          aria-label={`${modeLabel}: ${formatTime(remainingSeconds)} verbleibend`}
+          aria-label={t("timer.remaining", { mode: modeLabel, time: formatTime(remainingSeconds) })}
         >
           <div className="timer-ring__inner">
-            <span>{mode === "focus" ? "FOKUS" : "PAUSE"}</span>
+            <span>{t(mode === "focus" ? "timer.focus" : "timer.break").toLocaleUpperCase()}</span>
             <strong>{formatTime(remainingSeconds)}</strong>
             {!compact && (
-              <small>{isRunning ? "Bleib bei einer Sache" : "Bereit, wenn du es bist"}</small>
+              <small>{t(isRunning ? "timer.runningHint" : "timer.readyHint")}</small>
             )}
           </div>
         </div>
@@ -95,41 +97,39 @@ export function TimerCard({
         <div className="timer-controls">
           {!compact && onFocusGoalChange && !isGoalReadOnly && (
             <label className="focus-goal-field" htmlFor={goalInputId}>
-              <span>Ziel für diese Fokuszeit</span>
+              <span>{t("timer.goalLabel")}</span>
               <input
                 id={goalInputId}
                 type="text"
                 value={focusGoal}
                 maxLength={TIMER_GOAL_MAX_LENGTH}
                 aria-describedby={goalHintId}
-                placeholder="z. B. Kapitel 3 zusammenfassen"
+                placeholder={t("timer.goalPlaceholder")}
                 onChange={(event) =>
                   onFocusGoalChange(normalizeTimerGoal(event.target.value))
                 }
               />
               <small id={goalHintId}>
-                Bleibt während des Timers und im Overlay sichtbar.
+                {t("timer.goalHint")}
               </small>
             </label>
           )}
 
           {!compact && isGoalReadOnly && (
             <div className="focus-goal-field focus-goal-field--locked">
-              <span>Ziel dieser Fokusphase</span>
+              <span>{t("timer.lockedGoalLabel")}</span>
               <strong className="focus-goal-field__value">
-                {visibleFocusGoal || "Kein Ziel festgelegt"}
+                {visibleFocusGoal || t("timer.noGoal")}
               </strong>
               <small>
-                {mode === "break"
-                  ? "Bleibt bis zur nächsten Fokusphase sichtbar."
-                  : "Bleibt bis zum Zurücksetzen unverändert."}
+                {t(mode === "break" ? "timer.goalBreakHint" : "timer.goalLockedHint")}
               </small>
             </div>
           )}
 
           {compact && visibleFocusGoal && (
             <div className="focus-goal-display">
-              <span>Ziel der Fokusphase</span>
+              <span>{t("timer.overlayGoalLabel")}</span>
               <strong title={visibleFocusGoal}>{visibleFocusGoal}</strong>
             </div>
           )}
@@ -139,8 +139,8 @@ export function TimerCard({
               type="button"
               className="icon-button"
               onClick={onReset}
-              aria-label="Timer zurücksetzen"
-              title="Zurücksetzen"
+              aria-label={t("timer.resetLabel")}
+              title={t("timer.reset")}
             >
               <ResetIcon />
             </button>
@@ -150,14 +150,14 @@ export function TimerCard({
               onClick={isRunning ? onPause : onStart}
             >
               {isRunning ? <PauseIcon /> : <PlayIcon />}
-              {isRunning ? "Pausieren" : "Starten"}
+              {t(isRunning ? "timer.pause" : "timer.start")}
             </button>
             <button
               type="button"
               className="icon-button"
               onClick={onSkip}
-              aria-label="Phase überspringen"
-              title="Überspringen"
+              aria-label={t("timer.skipLabel")}
+              title={t("timer.skip")}
             >
               <SkipIcon />
             </button>
@@ -166,7 +166,7 @@ export function TimerCard({
           {!compact && onSettingsChange && (
             <div className="duration-settings">
               <label>
-                <span>Lerndauer</span>
+                <span>{t("timer.focusDuration")}</span>
                 <span className="number-input">
                   <input
                     type="number"
@@ -178,12 +178,12 @@ export function TimerCard({
                       updateMinutes("focusMinutes", event.target.value)
                     }
                   />
-                  <small>min</small>
+                  <small>{t("timer.minutesShort")}</small>
                 </span>
               </label>
               <span className="duration-settings__divider" />
               <label>
-                <span>Pausendauer</span>
+                <span>{t("timer.breakDuration")}</span>
                 <span className="number-input">
                   <input
                     type="number"
@@ -195,7 +195,7 @@ export function TimerCard({
                       updateMinutes("breakMinutes", event.target.value)
                     }
                   />
-                  <small>min</small>
+                  <small>{t("timer.minutesShort")}</small>
                 </span>
               </label>
             </div>

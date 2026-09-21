@@ -1,4 +1,5 @@
 import { useMemo, useSyncExternalStore } from "react";
+import { useI18n } from "../i18n";
 import { createPersistentStore } from "../lib/persistentStorage";
 
 export interface StorageRecovery {
@@ -13,17 +14,11 @@ export interface StorageRecovery {
   reset: () => void;
 }
 
-export function usePersistentState<T>(
-  key: string,
-  initialValue: T,
-  normalize?: (value: unknown) => T,
-) {
-  // Like useState, initialValue/normalize apply when this key is first opened.
-  // Store construction is read-only, including React StrictMode's double mount.
-  const store = useMemo(
-    () => createPersistentStore(key, initialValue, normalize),
-    [key],
-  );
+export function usePersistentState<T>(key: string, initialValue: T, normalize?: (value: unknown) => T) {
+  const { t } = useI18n();
+  // Construction, including StrictMode's double mount, never writes. Changing
+  // language must not recreate a store or discard its unsaved working copy.
+  const store = useMemo(() => createPersistentStore(key, initialValue, normalize), [key]);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const recovery: StorageRecovery = useMemo(() => ({
     blocked: snapshot.blocked,
@@ -36,6 +31,5 @@ export function usePersistentState<T>(
     restoreBackup: store.restoreBackup,
     reset: store.reset,
   }), [snapshot, store]);
-
-  return [snapshot.value, store.setValue, snapshot.error, recovery] as const;
+  return [snapshot.value, store.setValue, snapshot.error ? t(snapshot.error) : "", recovery] as const;
 }

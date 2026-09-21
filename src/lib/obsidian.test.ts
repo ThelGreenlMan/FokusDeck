@@ -1,11 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { open } from "@tauri-apps/plugin-dialog";
+import { setLanguage } from "../i18n";
+import germanSettings from "../i18n/locales/de/settings.json";
+import englishSettings from "../i18n/locales/en/settings.json";
 import type { Flashcard } from "../types";
 import {
   mergeVaultCards,
+  localizeNativeError,
+  chooseObsidianVault,
+  scanObsidianVault,
   parseObsidianNote,
   type VaultNote,
 } from "./obsidian";
 import { reviewLearningCard } from "./learning";
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
+
+afterEach(() => {
+  setLanguage("de", { persist: false });
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+});
 
 const vaultName = "Lernwissen";
 const vaultPath = "C:\\Notizen\\Lernwissen";
@@ -19,6 +34,13 @@ function note(content: string, relativePath = "Biologie/Photosynthese.md"): Vaul
 }
 
 describe("parseObsidianNote", () => {
+  it("never translates note content, identifiers, paths or frontmatter when the display language changes", () => {
+    const source = note("---\nfokusdeck: true\ndeck: Biologie\nquestion: Deutsche Frage\nanswer: Deutsche Antwort\n---");
+    const germanCard = parseObsidianNote(source, vaultName, vaultPath);
+    setLanguage("en", { persist: false });
+    expect(parseObsidianNote(source, vaultName, vaultPath)).toEqual(germanCard);
+    expect(germanCard).toMatchObject({ front: "Deutsche Frage", back: "Deutsche Antwort", deck: "Biologie" });
+  });
   it("creates a card from a marked heading note", () => {
     const card = parseObsidianNote(
       note(`---
@@ -119,6 +141,54 @@ A<!-- eins --><!-- zwei -->B<!-- unvollständig`),
         vaultPath,
       ),
     ).toBeNull();
+  });
+});
+
+describe("localizeNativeError", () => {
+  it("uses the active language in the native folder dialog without changing the selected path", async () => {
+    vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
+    vi.mocked(open).mockResolvedValue(vaultPath);
+    expect(await chooseObsidianVault()).toBe(vaultPath);
+    expect(open).toHaveBeenLastCalledWith({ directory: true, multiple: false, title: "Obsidian-Vault auswählen" });
+    setLanguage("en", { persist: false });
+    expect(await chooseObsidianVault()).toBe(vaultPath);
+    expect(open).toHaveBeenLastCalledWith({ directory: true, multiple: false, title: "Choose Obsidian vault" });
+  });
+
+  it("localizes browser-only failures after a language change", async () => {
+    const error = await scanObsidianVault(vaultPath).catch((value: unknown) => value);
+    expect(localizeNativeError(error)).toBe("Die Vault-Auswahl ist nur in der Desktop-App verfügbar.");
+    setLanguage("en", { persist: false });
+    expect(localizeNativeError(error)).toBe("Vault selection is only available in the desktop app.");
+  });
+
+  it("translates every known static native error and preserves German by default", () => {
+    const messages = Object.entries(germanSettings).filter(([key, value]) =>
+      key.startsWith("settings.native.") && typeof value === "string" && !value.includes("{path}"),
+    );
+    for (const [, message] of messages) expect(localizeNativeError(message)).toBe(message);
+    setLanguage("en", { persist: false });
+    for (const [key, message] of messages) {
+      expect(localizeNativeError(message)).toBe(englishSettings[key as keyof typeof englishSettings]);
+    }
+  });
+
+  it("preserves native backup paths exactly when translating recovery errors", () => {
+    const path = "C:\\Notizen\\Meine Prüfung {path}\\Sicherung.fokusdeck.json";
+    setLanguage("en", { persist: false });
+    expect(localizeNativeError(`Die Sammlung konnte nicht ersetzt werden. Die vorhandenen Daten liegen weiterhin unter ${path}.`))
+      .toBe(`The collection could not be replaced. The existing data is still available at ${path}.`);
+    expect(localizeNativeError(`Die Sammlung wurde gespeichert, aber die temporäre Sicherung ${path} konnte nicht entfernt werden.`))
+      .toBe(`The collection was saved, but the temporary backup at ${path} could not be removed.`);
+  });
+
+  it("keeps unknown diagnostics and renders errors using the current language", () => {
+    const error = new Error("Der ausgewählte Vault-Ordner wurde nicht gefunden.");
+    expect(localizeNativeError(error)).toBe(error.message);
+    setLanguage("en", { persist: false });
+    expect(localizeNativeError(error)).toBe("The selected vault folder was not found.");
+    expect(localizeNativeError(new Error("EACCES /my/custom/path"))).toBe("EACCES /my/custom/path");
+    expect(localizeNativeError(null)).toBe("Unknown error");
   });
 });
 

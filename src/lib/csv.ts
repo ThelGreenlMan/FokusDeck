@@ -1,9 +1,12 @@
 import type { Flashcard } from "../types";
-import { createCollectionDocument } from "./collection";
+import { t } from "../i18n";
+import { collectionError, createCollectionDocument } from "./collection";
 import { isTauriDesktop } from "./obsidian";
 
 const MAX_CSV_CARDS = 5_000;
 const DELIMITERS = [";", ",", "\t"] as const;
+// Persisted defaults participate in collection identity and must not follow UI language.
+const DEFAULT_CSV_NAME = "CSV-Import";
 
 const HEADER_ALIASES = {
   front: ["frage", "vorderseite", "front", "question", "term", "prompt"],
@@ -65,7 +68,7 @@ function parseRows(rawContent: string, delimiter: string) {
   }
 
   if (quoted) {
-    throw new Error("Die CSV-Datei enthält ein nicht geschlossenes Anführungszeichen.");
+    throw collectionError("study.csv.unclosedQuote");
   }
   if (field || row.length) {
     row.push(field);
@@ -100,18 +103,16 @@ function detectTable(rawContent: string) {
     }
   }
 
-  throw new Error(
-    "Die CSV-Kopfzeile muss die Spalten Frage und Antwort enthalten.",
-  );
+  throw collectionError("study.csv.missingHeaders");
 }
 
-function requiredCell(value: string | undefined, label: string, rowNumber: number, limit: number) {
+function requiredCell(value: string | undefined, labelKey: string, rowNumber: number, limit: number) {
   const normalized = value?.trim() ?? "";
   if (!normalized) {
-    throw new Error(`${label} in CSV-Zeile ${rowNumber} fehlt.`);
+    throw collectionError("study.csv.required", () => ({ label: t(labelKey), row: rowNumber }));
   }
   if (normalized.length > limit) {
-    throw new Error(`${label} in CSV-Zeile ${rowNumber} ist länger als ${limit} Zeichen.`);
+    throw collectionError("study.csv.tooLong", () => ({ label: t(labelKey), row: rowNumber, limit }));
   }
   return normalized;
 }
@@ -124,12 +125,10 @@ function parseMastered(value: string | undefined, rowNumber: number) {
   if (["1", "true", "ja", "yes", "gemeistert", "gewusst", "known"].includes(normalized)) {
     return true;
   }
-  throw new Error(
-    `Fortschritt in CSV-Zeile ${rowNumber} muss ja/nein oder true/false sein.`,
-  );
+  throw collectionError("study.csv.invalidProgress", { row: rowNumber });
 }
 
-export function parseCsvCollection(rawContent: string, name = "CSV-Import") {
+export function parseCsvCollection(rawContent: string, name = DEFAULT_CSV_NAME) {
   const { rows, headers } = detectTable(rawContent);
   const frontIndex = headerIndex(headers, HEADER_ALIASES.front);
   const backIndex = headerIndex(headers, HEADER_ALIASES.back);
@@ -138,23 +137,23 @@ export function parseCsvCollection(rawContent: string, name = "CSV-Import") {
   const dataRows = rows.slice(1);
 
   if (!dataRows.length) {
-    throw new Error("Die CSV-Datei enthält keine Karteikarten.");
+    throw collectionError("study.csv.noCards");
   }
   if (dataRows.length > MAX_CSV_CARDS) {
-    throw new Error(`Eine CSV-Datei darf höchstens ${MAX_CSV_CARDS} Karten enthalten.`);
+    throw collectionError("study.csv.tooMany", { count: MAX_CSV_CARDS });
   }
 
   const cards: Flashcard[] = dataRows.map((values, index) => {
     const rowNumber = index + 2;
     const deckValue = deckIndex >= 0 ? values[deckIndex]?.trim() : "";
     if (deckValue && deckValue.length > 100) {
-      throw new Error(`Stapel in CSV-Zeile ${rowNumber} ist länger als 100 Zeichen.`);
+      throw collectionError("study.csv.deckTooLong", { row: rowNumber });
     }
 
     return {
       id: `csv:${createId()}`,
-      front: requiredCell(values[frontIndex], "Frage", rowNumber, 1_000),
-      back: requiredCell(values[backIndex], "Antwort", rowNumber, 4_000),
+      front: requiredCell(values[frontIndex], "study.question", rowNumber, 1_000),
+      back: requiredCell(values[backIndex], "study.answer", rowNumber, 4_000),
       deck: deckValue || "Allgemein",
       mastered: masteredIndex >= 0 ? parseMastered(values[masteredIndex], rowNumber) : false,
       createdAt: new Date().toISOString(),
@@ -165,20 +164,20 @@ export function parseCsvCollection(rawContent: string, name = "CSV-Import") {
 }
 
 function csvNameFromPath(path: string) {
-  const fileName = path.split(/[\\/]/).pop() ?? "CSV-Import";
-  return fileName.replace(/\.csv$/i, "").trim().slice(0, 100) || "CSV-Import";
+  const fileName = path.split(/[\\/]/).pop() ?? DEFAULT_CSV_NAME;
+  return fileName.replace(/\.csv$/i, "").trim().slice(0, 100) || DEFAULT_CSV_NAME;
 }
 
 export async function loadCsvFile() {
   if (!isTauriDesktop()) {
-    throw new Error("CSV-Dateien können nur in der Desktop-App importiert werden.");
+    throw collectionError("study.csv.desktopOnly");
   }
   const { open } = await import("@tauri-apps/plugin-dialog");
   const path = await open({
-    title: "Karteikarten aus CSV importieren",
+    title: t("study.csv.importTitle"),
     directory: false,
     multiple: false,
-    filters: [{ name: "CSV-Datei", extensions: ["csv"] }],
+    filters: [{ name: t("study.csv.fileType"), extensions: ["csv"] }],
   });
   if (typeof path !== "string") return null;
 
