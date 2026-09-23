@@ -2,7 +2,7 @@
 
 FokusDeck ist eine derzeit für Windows veröffentlichte, lokale Desktop-App für konzentriertes Lernen. Sie kombiniert einen frei konfigurierbaren Lern- und Pausentimer mit digitalen Karteikarten und einer kompakten Always-on-top-Ansicht.
 
-## Funktionen in Version 0.5.1
+## Funktionen in Version 0.5.2
 
 - Lern- und Pausendauer frei einstellen
 - Ein konkretes Lernziel je Fokusphase festlegen und im Overlay anzeigen
