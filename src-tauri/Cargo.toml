@@ -1,6 +1,6 @@
 [package]
 name = "fokusdeck"
-version = "0.5.1"
+version = "0.5.2"
 description = "Fokussiert lernen mit Timer, Karteikarten und Always-on-top-Overlay"
 authors = ["FokusDeck Contributors"]
 edition = "2021"
